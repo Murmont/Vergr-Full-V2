@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="VERGR" />
+    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <meta name="theme-color" content="#07080D" />
+    <meta name="description" content="VERGR — Where Gamers Converge. Compete, Create, Earn, Shop." />
+    <title>VERGR</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet" />
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body, #root { height: 100%; width: 100%; }
+      body { background: #07080D; color: #ECEFFE; font-family: 'DM Sans', sans-serif; -webkit-font-smoothing: antialiased; }
+      ::-webkit-scrollbar { width: 0; height: 0; }
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      .text-gradient { background: linear-gradient(135deg, #4DFFD4 0%, #7B6FFF 50%, #C87FFF 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+      /* Engagement animations */
+      @keyframes slide-down { from { transform: translateY(-100%) translateX(-50%); opacity:0; } to { transform: translateY(0) translateX(-50%); opacity:1; } }
+      .animate-slide-down { animation: slide-down 0.35s cubic-bezier(0.25,0.1,0.25,1) forwards; }
+      @keyframes shimmer { from { background-position: -200% 0; } to { background-position: 200% 0; } }
+      .animate-shimmer { background: linear-gradient(90deg, transparent 0%, rgba(81,251,217,0.05) 50%, transparent 100%); background-size: 200% 100%; animation: shimmer 1.5s infinite; }
+      /* Safe area padding for notched phones */
+      .safe-top { padding-top: env(safe-area-inset-top, 0px); }
+      .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+      .gold-text { background: linear-gradient(135deg, #F5C542 0%, #D4A017 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+      input:-webkit-autofill { -webkit-box-shadow: 0 0 0 30px #161922 inset !important; -webkit-text-fill-color: #ECEFFE !important; }
+    </style>
+  </head>
+  <body>
+    <script>
+      (function() {
+        var t = 'dark';
+        try { t = localStorage.getItem('vergr_theme') || 'dark'; } catch(e) {}
+        var resolved = t;
+        if (t === 'system') {
+          resolved = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+        }
+        document.documentElement.setAttribute('data-theme', resolved);
+        document.documentElement.className = resolved;
+        if (resolved === 'light') {
+          document.body.style.background = '#F4F4F5';
+          document.body.style.color = '#09090B';
+        }
+      })();
+    </script>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  <script>if("serviceWorker" in navigator){navigator.serviceWorker.register("/sw.js").then(reg=>{reg.update();});}</script>
+  </body>
+</html>

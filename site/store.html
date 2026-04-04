@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Coin Store — VERGR</title>
+  <meta name="description" content="Purchase VERGR Coin bundles to tip, boost, enter tournaments, and trade on the marketplace." />
+  <meta name="theme-color" content="#07080D" />
+  <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+  <link rel="icon" href="/icons/icon-192.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,1,0&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+  <style>
+    .store-hero {
+      position: relative; padding: 140px 0 60px; text-align: center;
+      overflow: hidden;
+    }
+    .store-hero::before {
+      content: ''; position: absolute; inset: 0;
+      background: url('/backgrounds/static/bg_5.png') center/cover no-repeat;
+      opacity: 0.15;
+    }
+    .store-hero::after {
+      content: ''; position: absolute; inset: 0;
+      background: linear-gradient(180deg, transparent 40%, var(--bg) 100%);
+    }
+    .store-hero > * { position: relative; z-index: 1; }
+
+    .bundle-card .savings {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 700;
+      background: rgba(77,255,212,0.1); color: var(--brand-cyan);
+    }
+    .bundle-card.best-value { border-color: var(--brand-gold); }
+    .bundle-card.best-value::after {
+      content: 'BEST VALUE'; position: absolute; top: -1px; right: 20px;
+      padding: 4px 10px; font-size: 10px; font-weight: 800; letter-spacing: 0.08em;
+      background: var(--gold-gradient); color: #07080D; border-radius: 0 0 8px 8px;
+    }
+    .bundle-card { position: relative; }
+
+    .info-cards {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px; margin-top: 48px;
+    }
+    .info-card {
+      background: var(--card-bg); border: 1px solid var(--border);
+      border-radius: 16px; padding: 24px; display: flex; gap: 16px;
+      align-items: start;
+    }
+    .info-card .ic-icon {
+      width: 44px; height: 44px; border-radius: 12px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center; font-size: 20px;
+    }
+  </style>
+</head>
+<body>
+  <script>
+    (function(){var t='dark';try{t=localStorage.getItem('vergr_theme')||'dark'}catch(e){}
+    var r=t==='system'?(window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):t;
+    document.documentElement.setAttribute('data-theme',r);document.documentElement.className=r;})();
+  </script>
+
+  <!-- ═══ NAVIGATION ═══ -->
+  <nav class="site-nav">
+    <div class="nav-inner">
+      <a href="/" class="logo text-gradient">VERGR</a>
+      <ul class="nav-links">
+        <li><a href="/">Home</a></li>
+        <li><a href="/store" class="active">Coin Store</a></li>
+        <li><a href="/download">Download</a></li>
+        <li><a href="/help">Help</a></li>
+        <li><a href="/app" class="btn-primary" style="height:40px;padding:0 20px;font-size:13px;">Open App</a></li>
+      </ul>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <button class="theme-toggle" title="Toggle theme">
+          <span class="icon-sun material-symbols-outlined" style="font-size:20px;">light_mode</span>
+          <span class="icon-moon material-symbols-outlined" style="font-size:20px;">dark_mode</span>
+        </button>
+        <button class="nav-toggle" aria-label="Menu" aria-expanded="false">
+          <span class="material-symbols-outlined">menu</span>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ═══ STORE HERO ═══ -->
+  <section class="store-hero">
+    <div class="container">
+      <span class="badge-gold" style="margin-bottom:16px;">
+        <span class="material-symbols-outlined" style="font-size:14px;margin-right:4px;">toll</span>
+        Coin Store
+      </span>
+      <h1 style="font-family:'Syne',sans-serif;font-weight:800;font-size:clamp(2rem,5vw,3rem);line-height:1.1;margin-bottom:12px;">
+        Power Up Your <span class="text-gradient">Game</span>
+      </h1>
+      <p style="color:var(--text-secondary);font-size:16px;max-width:480px;margin:0 auto 28px;">
+        Coins fuel everything on VERGR — tips, tournaments, marketplace purchases, and post boosts. Minimum purchase: 100 Coins.
+      </p>
+      <!-- Price Toggle -->
+      <div class="price-toggle" id="priceToggle">
+        <button class="active" data-platform="web" onclick="setPlatform('web')">
+          <span class="material-symbols-outlined" style="font-size:16px;vertical-align:middle;margin-right:4px;">computer</span>
+          Web / Desktop
+        </button>
+        <button data-platform="mobile" onclick="setPlatform('mobile')">
+          <span class="material-symbols-outlined" style="font-size:16px;vertical-align:middle;margin-right:4px;">smartphone</span>
+          Mobile App
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ BUNDLES GRID ═══ -->
+  <section class="section" style="padding-top:0;">
+    <div class="container">
+      <!-- Savings Banner -->
+      <div style="background:linear-gradient(135deg,rgba(77,255,212,0.08),rgba(123,111,255,0.08));border:1px solid var(--brand-cyan);border-radius:16px;padding:20px 28px;display:flex;align-items:center;gap:16px;margin-bottom:28px;flex-wrap:wrap;">
+        <span class="material-symbols-outlined" style="font-size:32px;color:var(--brand-cyan);">savings</span>
+        <div style="flex:1;min-width:200px;">
+          <strong style="font-size:16px;">Save up to 40% by buying on Web or Desktop</strong>
+          <p style="font-size:13px;color:var(--text-secondary);margin-top:2px;">Mobile app stores charge fees that inflate prices. Buy directly through the web for the best deal.</p>
+        </div>
+      </div>
+      <div class="bundles-grid" id="bundlesGrid">
+        <!-- Populated by JS -->
+      </div>
+
+      <!-- Info Cards -->
+      <div class="info-cards">
+        <div class="info-card" data-animate>
+          <div class="ic-icon icon-cyan">
+            <span class="material-symbols-outlined">verified</span>
+          </div>
+          <div>
+            <strong style="font-size:15px;">Secure Payments</strong>
+            <p style="font-size:13px;color:var(--text-secondary);margin-top:4px;">Powered by Tebex — a trusted merchant of record handling all taxes and payment processing.</p>
+          </div>
+        </div>
+        <div class="info-card" data-animate>
+          <div class="ic-icon icon-gold">
+            <span class="material-symbols-outlined">bolt</span>
+          </div>
+          <div>
+            <strong style="font-size:15px;">Instant Delivery</strong>
+            <p style="font-size:13px;color:var(--text-secondary);margin-top:4px;">Coins are credited to your wallet immediately after payment confirmation.</p>
+          </div>
+        </div>
+        <div class="info-card" data-animate>
+          <div class="ic-icon icon-violet">
+            <span class="material-symbols-outlined">savings</span>
+          </div>
+          <div>
+            <strong style="font-size:15px;">Better Web Prices</strong>
+            <p style="font-size:13px;color:var(--text-secondary);margin-top:4px;">Purchasing on web/desktop saves you up to 40% compared to mobile app store prices.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ WHAT ARE COINS ═══ -->
+  <section class="section" style="background:var(--surface-1);">
+    <div class="container" style="text-align:center;">
+      <span class="section-label" style="justify-content:center;">How Coins Work</span>
+      <h2 class="section-title">Buy Coins. <span class="text-gradient">Do Everything.</span></h2>
+      <p style="color:var(--text-secondary);font-size:15px;max-width:520px;margin:0 auto 32px;">
+        Coins are the utility currency of VERGR. They can't be withdrawn directly — instead, when you spend Coins on other users, those users earn Gems which <em>can</em> be cashed out.
+      </p>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;text-align:center;">
+        <div class="card" style="padding:24px;">
+          <span class="material-symbols-outlined" style="font-size:28px;color:var(--brand-ember);margin-bottom:8px;display:block;">favorite</span>
+          <strong style="font-size:14px;display:block;">Tip Creators</strong>
+          <p style="font-size:13px;color:var(--text-secondary);margin-top:4px;">Show love to your favourite creators and streamers.</p>
+        </div>
+        <div class="card" style="padding:24px;">
+          <span class="material-symbols-outlined" style="font-size:28px;color:var(--brand-gold);margin-bottom:8px;display:block;">emoji_events</span>
+          <strong style="font-size:14px;display:block;">Enter Tournaments</strong>
+          <p style="font-size:13px;color:var(--text-secondary);margin-top:4px;">Pay entry fees and compete for the prize pool.</p>
+        </div>
+        <div class="card" style="padding:24px;">
+          <span class="material-symbols-outlined" style="font-size:28px;color:var(--brand-violet);margin-bottom:8px;display:block;">rocket_launch</span>
+          <strong style="font-size:14px;display:block;">Boost Posts</strong>
+          <p style="font-size:13px;color:var(--text-secondary);margin-top:4px;">Push your content to the top of the feed.</p>
+        </div>
+        <div class="card" style="padding:24px;">
+          <span class="material-symbols-outlined" style="font-size:28px;color:var(--brand-cyan);margin-bottom:8px;display:block;">storefront</span>
+          <strong style="font-size:14px;display:block;">Marketplace</strong>
+          <p style="font-size:13px;color:var(--text-secondary);margin-top:4px;">Buy coaching, design, and gaming services.</p>
+        </div>
+      </div>
+      <style>@media(max-width:768px){[style*="grid-template-columns:repeat(4"]{grid-template-columns:repeat(2,1fr)!important;}}</style>
+    </div>
+  </section>
+
+  <!-- ═══ FOOTER ═══ -->
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-inner">
+        <div class="footer-col">
+          <a href="/" class="logo text-gradient font-syne" style="font-size:20px;font-weight:800;display:inline-block;margin-bottom:8px;">VERGR</a>
+          <p style="font-size:13px;color:var(--text-muted);max-width:240px;">The gaming social platform where your skill pays off.</p>
+        </div>
+        <div class="footer-col">
+          <h4>Platform</h4>
+          <a href="/app">Open App</a>
+          <a href="/download">Download</a>
+          <a href="/store">Coin Store</a>
+        </div>
+        <div class="footer-col">
+          <h4>Legal</h4>
+          <a href="/privacy">Privacy Policy</a>
+          <a href="/terms">Terms of Service</a>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span>&copy; 2025 VERGR. All rights reserved.</span>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ═══ COMING SOON MODAL ═══ -->
+  <div class="modal-overlay" id="comingSoonModal">
+    <div class="modal">
+      <span class="material-symbols-outlined" style="font-size:48px;color:var(--brand-violet);margin-bottom:12px;">construction</span>
+      <h2>Coming Soon</h2>
+      <p>Coin purchases will be available once we integrate our payment provider. Stay tuned!</p>
+      <button class="btn-close" onclick="closeModal('comingSoonModal')">Got it</button>
+    </div>
+  </div>
+
+  <script src="/shared.js"></script>
+  <script>
+    // Bundle data from economy doc
+    var bundles = [
+      { coins: 100,   web: '€1.00',    mobile: '€1.49',    popular: false },
+      { coins: 200,   web: '€2.00',    mobile: '€2.99',    popular: false },
+      { coins: 500,   web: '€5.00',    mobile: '€6.99',    popular: true },
+      { coins: 1000,  web: '€10.00',   mobile: '€13.99',   popular: true },
+      { coins: 2000,  web: '€20.00',   mobile: '€27.99',   popular: false },
+      { coins: 5000,  web: '€50.00',   mobile: '€69.99',   popular: false },
+      { coins: 10000, web: '€100.00',  mobile: '€139.99',  bestValue: true },
+      { coins: 12000, web: '€120.00',  mobile: '€167.99',  popular: false },
+      { coins: 15000, web: '€150.00',  mobile: '€209.99',  popular: false },
+      { coins: 17000, web: '€170.00',  mobile: '€237.99',  popular: false },
+    ];
+
+    var currentPlatform = 'web';
+
+    function formatCoins(n) {
+      return n.toLocaleString('en-US');
+    }
+
+    function renderBundles() {
+      var grid = document.getElementById('bundlesGrid');
+      grid.innerHTML = bundles.map(function (b) {
+        var price = currentPlatform === 'web' ? b.web : b.mobile;
+        var classes = 'bundle-card';
+        if (b.popular) classes += ' popular';
+        if (b.bestValue) classes += ' best-value';
+        var savingsHTML = '';
+        if (currentPlatform === 'web' && b.coins >= 1000) {
+          savingsHTML = '<span class="savings"><span class="material-symbols-outlined" style="font-size:12px;">trending_down</span> Save ~40% vs mobile</span>';
+        }
+        return '<div class="' + classes + '">' +
+          '<div style="display:flex;justify-content:space-between;align-items:start;">' +
+            '<div>' +
+              '<div class="coin-amount"><span style="color:var(--brand-gold);">⬡</span> ' + formatCoins(b.coins) + '</div>' +
+              '<div style="font-size:13px;color:var(--text-muted);">Coins</div>' +
+            '</div>' +
+            (savingsHTML ? '<div>' + savingsHTML + '</div>' : '') +
+          '</div>' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:auto;">' +
+            '<div style="font-family:\'Syne\',sans-serif;font-weight:800;font-size:1.25rem;">' + price + '</div>' +
+            '<button class="btn-buy" onclick="openModal(\'comingSoonModal\')">' +
+              '<span class="material-symbols-outlined" style="font-size:16px;">shopping_cart</span> Buy' +
+            '</button>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+    }
+
+    function setPlatform(platform) {
+      currentPlatform = platform;
+      document.querySelectorAll('#priceToggle button').forEach(function (btn) {
+        btn.classList.toggle('active', btn.dataset.platform === platform);
+      });
+      renderBundles();
+    }
+
+    renderBundles();
+  </script>
+</body>
+</html>

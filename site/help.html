@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Help Center — VERGR</title>
+  <meta name="description" content="VERGR Help Center — guides, FAQs, and support for the gaming social platform." />
+  <meta name="theme-color" content="#07080D" />
+  <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+  <link rel="icon" href="/icons/icon-192.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,1,0&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+  <style>
+    .help-hero {
+      position: relative; padding: 140px 0 60px; text-align: center; overflow: hidden;
+    }
+    .help-hero::before {
+      content: ''; position: absolute; inset: 0;
+      background: url('/backgrounds/static/bg_4.png') center/cover no-repeat;
+      opacity: 0.15;
+    }
+    .help-hero::after {
+      content: ''; position: absolute; inset: 0;
+      background: linear-gradient(180deg, transparent 40%, var(--bg) 100%);
+    }
+    .help-hero > * { position: relative; z-index: 1; }
+
+    /* Topic cards */
+    .topics-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px; margin-bottom: 64px;
+    }
+    .topic-card {
+      background: var(--card-bg); border: 1px solid var(--border); border-radius: 16px;
+      padding: 24px; text-align: center; cursor: pointer; transition: all 0.2s;
+      box-shadow: var(--card-shadow);
+    }
+    .topic-card:hover { border-color: var(--brand-cyan); transform: translateY(-2px); }
+    .topic-card .tc-icon {
+      width: 52px; height: 52px; border-radius: 14px; margin: 0 auto 14px;
+      display: flex; align-items: center; justify-content: center; font-size: 26px;
+    }
+    .topic-card h3 { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 16px; margin-bottom: 6px; }
+    .topic-card p { font-size: 13px; color: var(--text-secondary); }
+
+    /* FAQ Accordion */
+    .faq-section { margin-bottom: 48px; }
+    .faq-section-title {
+      font-family: 'Syne', sans-serif; font-weight: 700; font-size: 1.25rem;
+      margin-bottom: 16px; display: flex; align-items: center; gap: 10px;
+      scroll-margin-top: 100px;
+    }
+    .faq-item {
+      background: var(--card-bg); border: 1px solid var(--border); border-radius: 14px;
+      margin-bottom: 8px; overflow: hidden; transition: border-color 0.2s;
+    }
+    .faq-item:hover { border-color: var(--border-hover); }
+    .faq-question {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 18px 20px; cursor: pointer; font-weight: 600; font-size: 15px;
+      background: none; border: none; width: 100%; text-align: left;
+      color: var(--text-primary); font-family: 'DM Sans', sans-serif;
+      transition: color 0.2s;
+    }
+    .faq-question:hover { color: var(--brand-cyan); }
+    .faq-question .arrow {
+      font-size: 20px; transition: transform 0.2s; flex-shrink: 0;
+      color: var(--text-muted);
+    }
+    .faq-item.open .faq-question .arrow { transform: rotate(180deg); }
+    .faq-answer {
+      max-height: 0; overflow: hidden; transition: max-height 0.3s ease, padding 0.3s ease;
+    }
+    .faq-item.open .faq-answer { max-height: 500px; }
+    .faq-answer-inner {
+      padding: 0 20px 18px; font-size: 14px; color: var(--text-secondary); line-height: 1.7;
+    }
+
+    /* Contact card */
+    .contact-card {
+      background: linear-gradient(135deg, rgba(123,111,255,0.06), rgba(200,127,255,0.06));
+      border: 1px solid var(--border); border-radius: 20px;
+      padding: 40px; text-align: center; margin-top: 48px;
+    }
+  </style>
+</head>
+<body>
+  <script>
+    (function(){var t='dark';try{t=localStorage.getItem('vergr_theme')||'dark'}catch(e){}
+    var r=t==='system'?(window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):t;
+    document.documentElement.setAttribute('data-theme',r);document.documentElement.className=r;})();
+  </script>
+
+  <nav class="site-nav">
+    <div class="nav-inner">
+      <a href="/" class="logo text-gradient">VERGR</a>
+      <ul class="nav-links">
+        <li><a href="/">Home</a></li>
+        <li><a href="/store">Coin Store</a></li>
+        <li><a href="/download">Download</a></li>
+        <li><a href="/help" class="active">Help</a></li>
+        <li><a href="/app" class="btn-primary" style="height:40px;padding:0 20px;font-size:13px;">Open App</a></li>
+      </ul>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <button class="theme-toggle" title="Toggle theme">
+          <span class="icon-sun material-symbols-outlined" style="font-size:20px;">light_mode</span>
+          <span class="icon-moon material-symbols-outlined" style="font-size:20px;">dark_mode</span>
+        </button>
+        <button class="nav-toggle" aria-label="Menu" aria-expanded="false">
+          <span class="material-symbols-outlined">menu</span>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ═══ HERO ═══ -->
+  <section class="help-hero">
+    <div class="container">
+      <span class="badge-cyan" style="margin-bottom:16px;">
+        <span class="material-symbols-outlined" style="font-size:14px;margin-right:4px;">help</span>
+        Help Center
+      </span>
+      <h1 style="font-family:'Syne',sans-serif;font-weight:800;font-size:clamp(2rem,5vw,3rem);line-height:1.1;margin-bottom:12px;">
+        How can we <span class="text-gradient">help?</span>
+      </h1>
+      <p style="color:var(--text-secondary);font-size:16px;max-width:480px;margin:0 auto;">
+        Browse topics below or scroll through frequently asked questions.
+      </p>
+    </div>
+  </section>
+
+  <!-- ═══ TOPIC CARDS ═══ -->
+  <section class="section" style="padding-top:0;">
+    <div class="container">
+      <div class="topics-grid">
+        <a href="#getting-started" class="topic-card" data-animate>
+          <div class="tc-icon" style="background:rgba(77,255,212,0.1);color:var(--brand-cyan);">
+            <span class="material-symbols-outlined">rocket_launch</span>
+          </div>
+          <h3>Getting Started</h3>
+          <p>Account setup, profile, and first steps</p>
+        </a>
+        <a href="#coins-gems" class="topic-card" data-animate>
+          <div class="tc-icon" style="background:rgba(245,197,66,0.1);color:var(--brand-gold);">
+            <span class="material-symbols-outlined">toll</span>
+          </div>
+          <h3>Coins & Gems</h3>
+          <p>Buying, earning, and withdrawing</p>
+        </a>
+        <a href="#tournaments" class="topic-card" data-animate>
+          <div class="tc-icon" style="background:rgba(255,77,106,0.1);color:var(--brand-ember);">
+            <span class="material-symbols-outlined">emoji_events</span>
+          </div>
+          <h3>Tournaments</h3>
+          <p>Hosting, joining, and prizes</p>
+        </a>
+        <a href="#squads" class="topic-card" data-animate>
+          <div class="tc-icon" style="background:rgba(123,111,255,0.1);color:var(--brand-violet);">
+            <span class="material-symbols-outlined">group</span>
+          </div>
+          <h3>Squads</h3>
+          <p>Creating, managing, and rewards</p>
+        </a>
+        <a href="#streaming" class="topic-card" data-animate>
+          <div class="tc-icon" style="background:rgba(145,70,255,0.1);color:#9146FF;">
+            <span class="material-symbols-outlined">live_tv</span>
+          </div>
+          <h3>Streaming</h3>
+          <p>Connecting Twitch, YouTube & Kick</p>
+        </a>
+        <a href="#messaging" class="topic-card" data-animate>
+          <div class="tc-icon" style="background:rgba(200,127,255,0.1);color:var(--brand-pink);">
+            <span class="material-symbols-outlined">chat</span>
+          </div>
+          <h3>Messaging</h3>
+          <p>DMs, groups, calls, and privacy</p>
+        </a>
+        <a href="#marketplace" class="topic-card" data-animate>
+          <div class="tc-icon" style="background:rgba(77,255,212,0.1);color:var(--brand-cyan);">
+            <span class="material-symbols-outlined">storefront</span>
+          </div>
+          <h3>Marketplace</h3>
+          <p>Selling and buying services</p>
+        </a>
+        <a href="#account" class="topic-card" data-animate>
+          <div class="tc-icon" style="background:rgba(245,197,66,0.1);color:var(--brand-gold);">
+            <span class="material-symbols-outlined">settings</span>
+          </div>
+          <h3>Account & Safety</h3>
+          <p>Security, privacy, and moderation</p>
+        </a>
+      </div>
+
+      <!-- ═══ FAQ SECTIONS ═══ -->
+
+      <!-- Getting Started -->
+      <div class="faq-section" id="getting-started">
+        <h2 class="faq-section-title">
+          <span class="material-symbols-outlined" style="color:var(--brand-cyan);">rocket_launch</span>
+          Getting Started
+        </h2>
+        <div class="faq-item">
+          <button class="faq-question" onclick="toggleFaq(this)">
+            How do I create an account?
+            <span class="material-symbols-outlined arrow">expand_more</span>
+          </button>
+          <div class="faq-answer"><div class="faq-answer-inner">
+            Sign up using your Google account — just tap "Sign in with Google" on the login screen. Your profile is created instantly. From there, you can add a username, bio, profile picture, and select your favourite games.
+          </div></div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-question" onclick="toggleFaq(this)">
+            What platforms is VERGR available on?
+            <span class="material-symbols-outlined arrow">expand_more</span>
+          </button>
+          <div class="faq-answer"><div class="faq-answer-inner">
+            VERGR is available right now as a web app — just open it in your browser. A native Windows desktop app (via Microsoft Store) is coming soon, along with iOS and Android apps. The web app has full feature parity and the best Coin prices.
+          </div></div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-question" onclick="toggleFaq(this)">
+            Is VERGR free to use?
+            <span class="material-symbols-outlined arrow">expand_more</span>
+          </button>
+          <div class="faq-answer"><div class="faq-answer-inner">
+            Yes, VERGR is completely free to sign up and use. You can post, message, join squads, and browse content without spending anything. Coins are optional — you only buy them if you want to tip, enter tournaments, boost posts, or purchase marketplace services.
+          </div></div>
+        </div>
+      </div>
+
+      <!-- Coins & Gems -->
+      <div class="faq-section" id="coins-gems">
+        <h2 class="faq-section-title">
+          <span class="material-symbols-outlined" style="color:var(--brand-gold);">toll</span>
+          Coins & Gems
+        </h2>
+        <div class="faq-item">
+          <button class="faq-question" onclick="toggleFaq(this)">
+            What's the difference between Coins and Gems?
+            <span class="material-symbols-outlined arrow">expand_more</span>
+          </button>
+          <div class="faq-answer"><div class="faq-answer-inner">
+            <strong>Coins</strong> are the utility currency — you buy them with real money and use them inside the app (tipping, tournaments, boosts, marketplace). Coins cannot be withdrawn. <strong>Gems</strong> are the withdrawal currency — you earn them when other people spend Coins on you (tips, service purchases, tournament wins). Gems can be cashed out to your bank account. 1,000 Gems = €10.00.
+          </div></div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-question" onclick="toggleFaq(this)">
+            Why are Coins cheaper on web than mobile?
+            <span class="material-symbols-outlined arrow">expand_more</span>
+          </button>
+          <div class="faq-answer"><div class="faq-answer-inner">
+            Apple and Google charge up to 30% fees on in-app purchases. We pass this cost to mobile prices to keep our margins sustainable. On web/desktop, we use Tebex with much lower fees — so you get the same Coins for ~40% less. We always recommend buying on web when possible.
+          </div></div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-question" onclick="toggleFaq(this)">
+            How do I withdraw my Gems?
+            <span class="material-symbols-outlined arrow">expand_more</span>
+          </button>
+          <div class="faq-answer"><div class="faq-answer-inner">
+            You need a minimum of 1,000 Gems (€10.00) to withdraw. Go to your Wallet, tap "Withdraw," and enter your bank details. All withdrawals go through a 72-hour escrow hold for security. After the hold, the funds are sent to your bank via SEPA, ACH, or SWIFT. Bank processing fees are passed to you.
+          </div></div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-question" onclick="toggleFaq(this)">
+            What is the commission rate?
+            <span class="material-symbols-outlined arrow">expand_more</span>
+          </button>
+          <div class="faq-answer"><div class="faq-answer-inner">
+            When Coins are spent on you, a commission is taken before they convert to Gems. New users start at 30% commission. As you level up (earning XP from activity), the rate drops — all the way down to 10% at Level 100. So a 100-Coin tip gives a new user 70 Gems, but a Level 100 user gets 90 Gems.
+          </div></div>
+        </div>
+      </div>
+
+      <!-- Tournaments -->
+      <div class="faq-section" id="tournaments">
+        <h2 class="faq-section-title">
+          <span class="material-symbols-outlined" style="color:var(--brand-ember);">emoji_events</span>
+          Tournaments
+        </h2>
+        <div class="faq-item">
+          <button class="faq-question" onclick="toggleFaq(this)">
+            How do tournaments work?
+            <span class="material-symbols-outlined arrow">expand_more</span>
+          </button>
+          <div class="faq-answer"><div class="faq-answer-inner">
+            Squads organise tournaments by setting an entry fee in Coins. Players join and compete. During matches, players share their stream link (Twitch, YouTube, or Kick) and the audience watches directly inside VERGR. The winner's prize is split: 75% goes to the player as Gems, and 25% goes to the squad wallet. A 5% service fee is deducted from the total pool before prizes are calculated.
+          </div></div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-question" onclick="toggleFaq(this)">
+            How do I host a tournament?
+            <span class="material-symbols-outlined arrow">expand_more</span>
+          </button>
+          <div class="faq-answer"><div class="faq-answer-inner">
+            You need to be at least Level 20 to host tournaments. Once unlocked, go to your Squad page and tap "Create Tournament." Set the game, entry fee, bracket type, and rules. You earn XP based on how many participants join, so it pays to promote your tournament.
+          </div></div>
+        </div>
+      </div>
+
+      <!-- Squads -->
+      <div class="faq-section" id="squads">
+        <h2 class="faq-section-title">
+          <span class="material-symbols-outlined" style="color:var(--brand-violet);">group</span>
+          Squads
+        </h2>
+        <div class="faq-item">
+          <button class="faq-question" onclick="toggleFaq(this)">
+            What is a Squad?
+            <span class="material-symbols-outlined arrow">expand_more</span>
+          </button>
+          <div class="faq-answer"><div class="faq-answer-inner">
+            A Squad is a team of exactly 100 members. Squads compete in tournaments together and share in the winnings — 25% of every tournament win goes to the squad wallet, which is distributed equally among all 100 members on the 1st of each month.
+          </div></div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-question" onclick="toggleFaq(this)">
+            How do I create a Squad?
+            <span class="material-symbols-outlined arrow">expand_more</span>
+          </button>
+          <div class="faq-answer"><div class="faq-answer-inner">
+            Squad creation unlocks at Level 10. If you want to skip the level requirement, you can purchase a "Squad License" for €5.00. Once created, invite members through the app — your squad can have up to 100 members.
+          </div></div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-question" onclick="toggleFaq(this)">
+            How does the monthly distribution work?
+            <span class="material-symbols-outlined arrow">expand_more</span>
+          </button>
+          <div class="faq-answer"><div class="faq-answer-inner">
+            On the 1st of every month at midnight, a scheduled job reads your squad's wallet balance, divides it by 100, and credits each member's Gem balance equally. The squad wallet then resets to 0. This is fully automated — no action needed from squad leaders.
+          </div></div>
+        </div>
+      </div>
+
+      <!-- Streaming -->
+      <div class="faq-section" id="streaming">
+        <h2 class="faq-section-title">
+          <span class="material-symbols-outlined" style="color:#9146FF;">live_tv</span>
+          Streaming
+        </h2>
+        <div class="faq-item">
+          <button class="faq-question" onclick="toggleFaq(this)">
+            How do I connect my stream?
+            <span class="material-symbols-outlined arrow">expand_more</span>
+          </button>
+          <div class="faq-answer"><div class="faq-answer-inner">
+            VERGR doesn't host streams — instead, you link your existing Twitch, YouTube, or Kick channel. Go to your profile settings, tap "Linked Accounts," and connect your streaming platform. When you go live, your stream is embedded inside VERGR so your audience can watch without leaving the app.
+          </div></div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-question" onclick="toggleFaq(this)">
+            How does the Twitch chat sync work?
+            <span class="material-symbols-outlined arrow">expand_more</span>
+          </button>
+          <div class="faq-answer"><div class="faq-answer-inner">
+            VERGR connects directly to your Twitch chat via IRC/WebSocket. Your Twitch chat messages appear inside VERGR in real time, and VERGR users' messages are sent to your Twitch chat. This means cross-platform interaction — viewers on Twitch and viewers on VERGR are in the same conversation.
+          </div></div>
+        </div>
+      </div>
+
+      <!-- Messaging -->
+      <div class="faq-section" id="messaging">
+        <h2 class="faq-section-title">
+          <span class="material-symbols-outlined" style="color:var(--brand-pink);">chat</span>
+          Messaging
+        </h2>
+        <div class="faq-item">
+          <button class="faq-question" onclick="toggleFaq(this)">
+            Are my messages private?
+            <span class="material-symbols-outlined arrow">expand_more</span>
+          </button>
+          <div class="faq-answer"><div class="faq-answer-inner">
+            Yes. Direct messages are temporarily stored on our servers only for delivery. Messages are saved locally on your device. Server-side message data is automatically deleted using TTL (Time To Live) policies. We do not read, scan, or analyse the content of private messages.
+          </div></div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-question" onclick="toggleFaq(this)">
+            How do voice and video calls work?
+            <span class="material-symbols-outlined arrow">expand_more</span>
+          </button>
+          <div class="faq-answer"><div class="faq-answer-inner">
+            VERGR uses WebRTC for peer-to-peer voice and video calls. This means calls go directly between your devices using Google's STUN servers — we don't route your call through our servers. This keeps calls fast, private, and free.
+          </div></div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-question" onclick="toggleFaq(this)">
+            How large can group chats be?
+            <span class="material-symbols-outlined arrow">expand_more</span>
+          </button>
+          <div class="faq-answer"><div class="faq-answer-inner">
+            Groups can have up to 1,000 members. Group messages work the same way as DMs — temporarily stored on the server for delivery, with local storage on each member's device.
+          </div></div>
+        </div>
+      </div>
+
+      <!-- Marketplace -->
+      <div class="faq-section" id="marketplace">
+        <h2 class="faq-section-title">
+          <span class="material-symbols-outlined" style="color:var(--brand-cyan);">storefront</span>
+          Marketplace
+        </h2>
+        <div class="faq-item">
+          <button class="faq-question" onclick="toggleFaq(this)">
+            What can I sell on the marketplace?
+            <span class="material-symbols-outlined arrow">expand_more</span>
+          </button>
+          <div class="faq-answer"><div class="faq-answer-inner">
+            You can sell gaming-related services: coaching sessions, rank boosting, graphic design (overlays, logos), video editing, and more. Paid coaching unlocks at Level 30. All transactions use escrow — the buyer's Coins are held until the service is delivered and confirmed.
+          </div></div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-question" onclick="toggleFaq(this)">
+            How does escrow work for marketplace orders?
+            <span class="material-symbols-outlined arrow">expand_more</span>
+          </button>
+          <div class="faq-answer"><div class="faq-answer-inner">
+            When a buyer places an order, their Coins are held in escrow. The seller completes the service and marks it as delivered. The buyer then confirms delivery, and the Coins convert to Gems (minus commission) in the seller's wallet. If there's a dispute, it goes to our moderation team.
+          </div></div>
+        </div>
+      </div>
+
+      <!-- Account & Safety -->
+      <div class="faq-section" id="account">
+        <h2 class="faq-section-title">
+          <span class="material-symbols-outlined" style="color:var(--brand-gold);">settings</span>
+          Account & Safety
+        </h2>
+        <div class="faq-item">
+          <button class="faq-question" onclick="toggleFaq(this)">
+            What is the Conduct Score?
+            <span class="material-symbols-outlined arrow">expand_more</span>
+          </button>
+          <div class="faq-answer"><div class="faq-answer-inner">
+            Your Conduct Score reflects how positively you interact with the community. Receiving "Helpful" and "Respect" reactions increases your score. A high Conduct Score (above 800) unlocks special rewards like the "The Helpful" title at Level 15, custom emotes at Level 25, and guardian priority at Level 60. Toxic behaviour lowers your score and can restrict access to these perks.
+          </div></div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-question" onclick="toggleFaq(this)">
+            What is KYC and why do I need it?
+            <span class="material-symbols-outlined arrow">expand_more</span>
+          </button>
+          <div class="faq-answer"><div class="faq-answer-inner">
+            KYC (Know Your Customer) is identity verification required for withdrawals. Before you can cash out your Gems, you need to verify your identity — this is a legal requirement for financial transactions and helps us prevent fraud. You'll need to provide a government-issued ID and a selfie.
+          </div></div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-question" onclick="toggleFaq(this)">
+            How do I report a user?
+            <span class="material-symbols-outlined arrow">expand_more</span>
+          </button>
+          <div class="faq-answer"><div class="faq-answer-inner">
+            Tap on the user's profile, then tap the three-dot menu and select "Report." Choose the reason for reporting and provide any additional context. Our moderation team reviews all reports. Serious violations (cheating, fraud, harassment) can result in account suspension and Gem forfeiture.
+          </div></div>
+        </div>
+      </div>
+
+      <!-- Contact -->
+      <div class="contact-card" data-animate>
+        <span class="material-symbols-outlined" style="font-size:48px;color:var(--brand-violet);margin-bottom:12px;">support_agent</span>
+        <h2 style="font-family:'Syne',sans-serif;font-weight:800;font-size:1.5rem;margin-bottom:8px;">Still need help?</h2>
+        <p style="color:var(--text-secondary);font-size:15px;max-width:440px;margin:0 auto 24px;">
+          Can't find what you're looking for? Reach out through the in-app feedback system or join our Discord community.
+        </p>
+        <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
+          <a href="/app" class="btn-primary" style="display:inline-flex;">
+            <span class="material-symbols-outlined" style="font-size:18px;">feedback</span>
+            In-App Feedback
+          </a>
+          <a href="#" class="btn-secondary" style="display:inline-flex;">
+            <span class="material-symbols-outlined" style="font-size:18px;">forum</span>
+            Discord
+          </a>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ═══ FOOTER ═══ -->
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-inner">
+        <div class="footer-col">
+          <a href="/" class="logo text-gradient font-syne" style="font-size:20px;font-weight:800;display:inline-block;margin-bottom:8px;">VERGR</a>
+          <p style="font-size:13px;color:var(--text-muted);max-width:240px;">The gaming social platform where your skill pays off.</p>
+        </div>
+        <div class="footer-col">
+          <h4>Platform</h4>
+          <a href="/app">Open App</a>
+          <a href="/download">Download</a>
+          <a href="/store">Coin Store</a>
+          <a href="/help">Help Center</a>
+        </div>
+        <div class="footer-col">
+          <h4>Legal</h4>
+          <a href="/privacy">Privacy Policy</a>
+          <a href="/terms">Terms of Service</a>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span>&copy; 2025 VERGR. All rights reserved.</span>
+      </div>
+    </div>
+  </footer>
+
+  <script src="/shared.js"></script>
+  <script>
+    function toggleFaq(btn) {
+      var item = btn.parentElement;
+      var wasOpen = item.classList.contains('open');
+      // Close all in same section
+      item.parentElement.querySelectorAll('.faq-item').forEach(function(el) {
+        el.classList.remove('open');
+      });
+      if (!wasOpen) item.classList.add('open');
+    }
+  </script>
+</body>
+</html>

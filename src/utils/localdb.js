@@ -1,0 +1,5 @@
+const P = 'vergr_';
+export const localDb = { get: (k) => { try { return JSON.parse(localStorage.getItem(P+k)); } catch { return null; } }, set: (k,v) => { try { localStorage.setItem(P+k, JSON.stringify(v)); } catch {} }, delete: (k) => { try { localStorage.removeItem(P+k); } catch {} }, clear: () => { try { Object.keys(localStorage).filter(k => k.startsWith(P)).forEach(k => localStorage.removeItem(k)); } catch {} } };
+export default localDb;
+export const getStorageUsage = () => { try { let t=0; for (let i=0;i<localStorage.length;i++) { const k=localStorage.key(i); if (k?.startsWith(P)) t+=(localStorage.getItem(k)||'').length*2; } return { usedBytes:t, usedMB:(t/1024/1024).toFixed(2) }; } catch { return { usedBytes:0, usedMB:'0.00' }; } };
+export const clearAllMessageCache = () => { try { const ks=[]; for (let i=0;i<localStorage.length;i++) { const k=localStorage.key(i); if (k?.startsWith('vergr_msg_')||k?.startsWith('vergr_chat_')) ks.push(k); } ks.forEach(k=>localStorage.removeItem(k)); return ks.length; } catch { return 0; } };

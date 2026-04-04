@@ -1,0 +1,149 @@
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
+import { db } from '../../firebase/config';
+import { useAuth } from '../../context/AuthContext';
+import TopBar from '../../components/TopBar';
+import UserAvatar from '../../components/UserAvatar';
+import Icon from '../../components/Icon';
+import RightSidebarPanel from '../../components/RightSidebarPanel';
+import useResponsive from '../../hooks/useResponsive';
+import { useLayout } from '../../context/LayoutContext';
+
+const CATEGORIES = [
+  { key: 'xp', label: 'Top XP', field: 'totalXP', icon: 'military_tech' },
+  { key: 'posts', label: 'Top Posters', field: 'postCount', icon: 'edit_note' },
+  { key: 'followers', label: 'Most Followed', field: 'followerCount', icon: 'group' },
+];
+
+const PERIODS = ['All Time', 'This Month', 'This Week'];
+const PODIUM_COLORS = { 0: '#F5C542', 1: '#C0C0C0', 2: '#CD7F32' };
+
+export default function LeaderboardScreen() {
+  const [category, setCategory] = useState(CATEGORIES[0]);
+  const [period, setPeriod] = useState('All Time');
+  const [entries, setEntries] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const { currentUser } = useAuth();
+  const navigate = useNavigate();
+  const { isMobile, isDesktop } = useResponsive();
+  const { setRightPanel, setContentAlign } = useLayout();
+
+  useEffect(() => {
+    setRightPanel(isDesktop ? <RightSidebarPanel /> : null);
+    setContentAlign('left');
+    return () => { setRightPanel(null); setContentAlign('center'); };
+  }, [setRightPanel, setContentAlign, isDesktop]);
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      try {
+        const q = query(collection(db, 'users'), orderBy(category.field, 'desc'), limit(50));
+        const snap = await getDocs(q);
+        const users = snap.docs
+          .map((d, i) => ({ id: d.id, rank: i + 1, ...d.data(), isYou: d.id === currentUser?.uid }))
+          .filter(u => (u[category.field] || 0) > 0);
+        setEntries(users);
+      } catch (err) {
+        console.error('Leaderboard error:', err);
+      }
+      setLoading(false);
+    };
+    load();
+  }, [category, currentUser]);
+
+  const top3 = entries.slice(0, 3);
+  const rest = entries.slice(3);
+  const formatVal = (n) => {
+    if (!n) return '0';
+    if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+    if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+    return n.toLocaleString();
+  };
+
+  return (
+    <div className="pb-8">
+      {isMobile && <TopBar title="Leaderboard" showBack />}
+      {!isMobile && (
+        <div className="px-4 pt-5 pb-2">
+          <h1 className="font-syne text-2xl font-extrabold text-white">Leaderboard</h1>
+        </div>
+      )}
+
+      {/* Category tabs */}
+      <div className="flex gap-2 px-4 py-3 overflow-x-auto no-scrollbar">
+        {CATEGORIES.map(cat => (
+          <button key={cat.key} onClick={() => setCategory(cat)}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all ${
+              category.key === cat.key ? 'bg-brand-cyan text-bg-dark' : 'bg-surface-2 text-text-secondary hover:text-white'
+            }`}>
+            <Icon name={cat.icon} size={14} /> {cat.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="px-4">
+        {loading ? (
+          <div className="flex justify-center py-16"><div className="w-8 h-8 border-3 border-brand-cyan border-t-transparent rounded-full animate-spin" /></div>
+        ) : entries.length === 0 ? (
+          <div className="text-center py-16">
+            <Icon name="leaderboard" size={48} className="text-text-muted/20 mx-auto mb-3" />
+            <p className="text-text-muted text-sm">No data yet. Be the first on the board!</p>
+          </div>
+        ) : (
+          <>
+            {/* Podium — top 3 */}
+            {top3.length >= 3 && (
+              <div className="flex items-end justify-center gap-3 py-6 mb-4">
+                {[1, 0, 2].map(idx => {
+                  const user = top3[idx];
+                  if (!user) return null;
+                  const isFirst = idx === 0;
+                  return (
+                    <button key={user.id} onClick={() => navigate(`/user/${user.id}`)}
+                      className="flex flex-col items-center group">
+                      <div className={`relative ${isFirst ? 'mb-2' : 'mb-1'}`}>
+                        {isFirst && <Icon name="emoji_events" size={24} className="text-brand-gold absolute -top-6 left-1/2 -translate-x-1/2" />}
+                        <div className="rounded-full p-[2px]" style={{ background: PODIUM_COLORS[idx] }}>
+                          <UserAvatar src={user.avatar} size={isFirst ? 64 : 48} />
+                        </div>
+                        <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black text-bg-dark"
+                          style={{ background: PODIUM_COLORS[idx] }}>
+                          {idx + 1}
+                        </div>
+                      </div>
+                      <p className={`font-bold truncate max-w-[80px] ${isFirst ? 'text-sm' : 'text-xs'} ${user.isYou ? 'text-brand-cyan' : 'text-text-primary'}`}>
+                        {user.displayName || user.username}
+                      </p>
+                      <p className="text-text-muted text-[10px] font-dmmono">{formatVal(user[category.field])}</p>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Rest of leaderboard */}
+            <div className="space-y-1.5">
+              {rest.map(user => (
+                <button key={user.id} onClick={() => navigate(`/user/${user.id}`)}
+                  className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${
+                    user.isYou ? 'bg-brand-cyan/10 border border-brand-cyan/30' : 'bg-surface-1 border border-white/[0.06] hover:border-white/[0.12]'
+                  }`}>
+                  <span className="w-8 text-center text-text-muted text-xs font-dmmono font-bold">{user.rank}</span>
+                  <UserAvatar src={user.avatar} size={36} />
+                  <div className="flex-1 text-left min-w-0">
+                    <p className={`text-sm font-semibold truncate ${user.isYou ? 'text-brand-cyan' : 'text-text-primary'}`}>{user.displayName || user.username}</p>
+                    <p className="text-text-muted text-xs font-dmmono">@{user.username}</p>
+                  </div>
+                  <span className="text-sm font-dmmono font-bold text-brand-gold">{formatVal(user[category.field])}</span>
+                  {user.isYou && <span className="px-2 py-0.5 rounded-full bg-brand-cyan/15 text-brand-cyan text-[9px] font-bold">YOU</span>}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}

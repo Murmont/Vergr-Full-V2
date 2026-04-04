@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Privacy Policy — VERGR</title>
+  <meta name="description" content="VERGR Privacy Policy — how we collect, use, and protect your data." />
+  <meta name="theme-color" content="#07080D" />
+  <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+  <link rel="icon" href="/icons/icon-192.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,1,0&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <script>
+    (function(){var t='dark';try{t=localStorage.getItem('vergr_theme')||'dark'}catch(e){}
+    var r=t==='system'?(window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):t;
+    document.documentElement.setAttribute('data-theme',r);document.documentElement.className=r;})();
+  </script>
+
+  <nav class="site-nav">
+    <div class="nav-inner">
+      <a href="/" class="logo text-gradient">VERGR</a>
+      <ul class="nav-links">
+        <li><a href="/">Home</a></li>
+        <li><a href="/store">Coin Store</a></li>
+        <li><a href="/download">Download</a></li>
+        <li><a href="/help">Help</a></li>
+        <li><a href="/app" class="btn-primary" style="height:40px;padding:0 20px;font-size:13px;">Open App</a></li>
+      </ul>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <button class="theme-toggle" title="Toggle theme">
+          <span class="icon-sun material-symbols-outlined" style="font-size:20px;">light_mode</span>
+          <span class="icon-moon material-symbols-outlined" style="font-size:20px;">dark_mode</span>
+        </button>
+        <button class="nav-toggle" aria-label="Menu" aria-expanded="false">
+          <span class="material-symbols-outlined">menu</span>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <main class="legal-content container-narrow section">
+    <h1>Privacy Policy</h1>
+    <p class="last-updated">Last updated: March 2026</p>
+
+    <p>VERGR ("we", "our", or "us") operates the VERGR platform, including the web application at vergr-v2.web.app, desktop application, and mobile applications (collectively, the "Service"). This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our Service.</p>
+
+    <h2>1. Information We Collect</h2>
+    <p>We collect information you provide directly to us when you create an account, update your profile, make purchases, or communicate with other users. This includes:</p>
+    <ul>
+      <li>Account information (name, email address, profile picture) obtained through Google Sign-In</li>
+      <li>Profile information you voluntarily add (username, bio, gaming preferences)</li>
+      <li>Transaction data (coin purchases, tips, tournament entries, marketplace orders)</li>
+      <li>Communications (messages sent through our platform, which are temporarily stored on our servers)</li>
+      <li>Content you post (images, videos, text posts, status updates)</li>
+      <li>Device and usage information (IP address, browser type, operating system, app version)</li>
+    </ul>
+
+    <h2>2. How We Use Your Information</h2>
+    <p>We use the information we collect to provide, maintain, and improve the Service, including:</p>
+    <ul>
+      <li>Creating and managing your account</li>
+      <li>Processing transactions and managing your wallet (Coins, Gems, escrow)</li>
+      <li>Facilitating communication between users</li>
+      <li>Organising and managing tournaments and squads</li>
+      <li>Preventing fraud, enforcing our terms, and ensuring platform security</li>
+      <li>Sending service-related notifications (push notifications, email alerts)</li>
+      <li>Analysing usage patterns to improve the platform</li>
+    </ul>
+
+    <h2>3. Message Storage & Privacy</h2>
+    <p>Direct messages between users are temporarily stored on our servers to facilitate delivery. Messages are stored locally on each user's device. Unless you subscribe to our cloud storage feature, server-side message data is automatically deleted using Firestore TTL (Time To Live) policies. We do not read, scan, or analyse the content of private messages.</p>
+
+    <h2>4. Financial Data & Withdrawals</h2>
+    <p>When you request a withdrawal, we process your financial information through our payment partners (Stripe, Wise). We store wallet balances and transaction history in Cloud Firestore. All withdrawal requests undergo a 72-hour escrow period for security verification. We retain transaction records as required by applicable financial regulations.</p>
+
+    <h2>5. Third-Party Services</h2>
+    <p>Our Service integrates with third-party services including:</p>
+    <ul>
+      <li><strong>Firebase (Google):</strong> Authentication, database, hosting, cloud functions, and analytics</li>
+      <li><strong>Tebex:</strong> Payment processing and merchant of record services for coin purchases</li>
+      <li><strong>Twitch:</strong> Stream embedding and IRC chat integration during tournaments</li>
+      <li><strong>Google Cloud Platform:</strong> Infrastructure, scheduled tasks, and logging</li>
+    </ul>
+    <p>Each third-party service has its own privacy policy governing their use of your data.</p>
+
+    <h2>6. Data Security</h2>
+    <p>We implement appropriate technical and organisational measures to protect your personal data, including Firebase App Check to prevent unauthorised API access, Firestore Security Rules to restrict data access, Cloud KMS encryption for sensitive financial data, and secure WebRTC connections for voice and video calls (using Google STUN servers).</p>
+
+    <h2>7. Your Rights</h2>
+    <p>Depending on your location, you may have the right to access, correct, delete, or port your personal data. You may also object to or restrict certain processing. To exercise these rights, contact us at the email address below.</p>
+
+    <h2>8. Children's Privacy</h2>
+    <p>The Service is not intended for users under the age of 13 (or the applicable age of consent in your jurisdiction). We do not knowingly collect personal information from children. If you believe a child has provided us with personal data, please contact us.</p>
+
+    <h2>9. Data Retention</h2>
+    <p>We retain your account data for as long as your account is active. Transaction records are retained as required by law. Temporary message data is deleted according to our TTL policies. You may request account deletion at any time.</p>
+
+    <h2>10. Changes to This Policy</h2>
+    <p>We may update this Privacy Policy from time to time. We will notify you of any changes by posting the new policy on this page and updating the "Last updated" date.</p>
+
+    <h2>11. Contact Us</h2>
+    <p>If you have questions about this Privacy Policy, please contact us at:</p>
+    <p><strong>Email:</strong> privacy@vergr.app (coming soon)<br />
+    <strong>Platform:</strong> Use the in-app feedback system</p>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-bottom" style="border-top:none;margin-top:0;padding-top:0;">
+        <span>&copy; 2025 VERGR. All rights reserved.</span>
+        <div style="display:flex;gap:16px;">
+          <a href="/privacy" style="color:var(--brand-cyan);font-size:13px;">Privacy</a>
+          <a href="/terms" style="color:var(--text-muted);font-size:13px;">Terms</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="/shared.js"></script>
+</body>
+</html>

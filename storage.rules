@@ -1,0 +1,199 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuth() && request.auth.uid == userId;
+    }
+
+    // Max file size check in MB.
+    // Tier-specific limits (free=25MB, lite=100MB, pro=500MB) are enforced
+    // client-side in mediaHelpers.js. Storage rules allow the max (pro) limit.
+    function isUnder(maxMB) {
+      return request.resource.size < maxMB * 1024 * 1024;
+    }
+
+    function isImage() {
+      return request.resource.contentType.matches('image/.*');
+    }
+
+    function isVideo() {
+      return request.resource.contentType.matches('video/.*');
+    }
+
+    function isAudio() {
+      return request.resource.contentType.matches('audio/.*');
+    }
+
+    function isMediaFile() {
+      return isImage() || isVideo() || isAudio();
+    }
+
+    function isAnyFile() {
+      return request.resource.size > 0;
+    }
+
+    // ═══════════════════════════════════════════
+    // USER AVATARS & BANNERS
+    // ═══════════════════════════════════════════
+    match /users/{userId}/avatar/{fileName} {
+      allow read: if true;
+      allow write: if isOwner(userId) && isImage() && isUnder(5);
+    }
+
+    match /users/{userId}/banner/{fileName} {
+      allow read: if true;
+      allow write: if isOwner(userId) && isImage() && isUnder(10);
+    }
+
+    // ═══════════════════════════════════════════
+    // DM CHAT MEDIA
+    // Voice notes, images, videos, files, general media, backgrounds.
+    // Max 500MB to support Pro tier. Client enforces per-tier limits.
+    // ═══════════════════════════════════════════
+    match /voice_notes/{fileName} {
+      allow read: if isAuth();
+      allow write: if isAuth() && isAudio() && isUnder(25);
+    }
+
+    match /chat_images/{fileName} {
+      allow read: if isAuth();
+      allow write: if isAuth() && isImage() && isUnder(500);
+    }
+
+    match /chat_videos/{fileName} {
+      allow read: if isAuth();
+      allow write: if isAuth() && isVideo() && isUnder(500);
+    }
+
+    match /chat_files/{fileName} {
+      allow read: if isAuth();
+      allow write: if isAuth() && isAnyFile() && isUnder(500);
+    }
+
+    match /chat_media/{fileName} {
+      allow read: if isAuth();
+      allow write: if isAuth() && isUnder(500);
+    }
+
+    match /chat_backgrounds/{fileName} {
+      allow read: if isAuth();
+      allow write: if isAuth() && isImage() && isUnder(10);
+    }
+
+    // ═══════════════════════════════════════════
+    // SQUAD CHAT MEDIA
+    // Same tier-based limits, enforced client-side.
+    // ═══════════════════════════════════════════
+    match /squad_voice/{fileName} {
+      allow read: if isAuth();
+      allow write: if isAuth() && isAudio() && isUnder(25);
+    }
+
+    match /squad_images/{fileName} {
+      allow read: if isAuth();
+      allow write: if isAuth() && isImage() && isUnder(500);
+    }
+
+    match /squad_videos/{fileName} {
+      allow read: if isAuth();
+      allow write: if isAuth() && isVideo() && isUnder(500);
+    }
+
+    // ═══════════════════════════════════════════
+    // POST MEDIA
+    // ═══════════════════════════════════════════
+    match /posts/{postId}/{fileName} {
+      allow read: if true;
+      allow write: if isAuth() && isMediaFile() && isUnder(500);
+    }
+
+    // ═══════════════════════════════════════════
+    // STORY MEDIA
+    // ═══════════════════════════════════════════
+    match /stories/{storyId}/{fileName} {
+      allow read: if true;
+      allow write: if isAuth() && isMediaFile() && isUnder(30);
+    }
+
+    // ═══════════════════════════════════════════
+    // SQUAD PROFILE MEDIA (avatars, banners, gallery, old chat path)
+    // ═══════════════════════════════════════════
+    match /squads/{squadId}/avatar/{fileName} {
+      allow read: if true;
+      allow write: if isAuth() && isImage() && isUnder(5);
+    }
+
+    match /squads/{squadId}/banner/{fileName} {
+      allow read: if true;
+      allow write: if isAuth() && isImage() && isUnder(10);
+    }
+
+    match /squads/{squadId}/media/{fileName} {
+      allow read: if true;
+      allow write: if isAuth() && isMediaFile() && isUnder(500);
+    }
+
+    match /squads/{squadId}/chat/{fileName} {
+      allow read: if true;
+      allow write: if isAuth() && isMediaFile() && isUnder(500);
+    }
+
+    // ═══════════════════════════════════════════
+    // DIRECT MESSAGE MEDIA (legacy path)
+    // ═══════════════════════════════════════════
+    match /conversations/{convoId}/{fileName} {
+      allow read: if isAuth();
+      allow write: if isAuth() && isUnder(500);
+    }
+
+    // ═══════════════════════════════════════════
+    // PRODUCT IMAGES
+    // ═══════════════════════════════════════════
+    match /products/{productId}/{fileName} {
+      allow read: if true;
+      allow write: if isAuth() && isImage() && isUnder(10);
+    }
+
+    // ═══════════════════════════════════════════
+    // STREAM THUMBNAILS
+    // ═══════════════════════════════════════════
+    match /streams/{streamId}/thumbnail/{fileName} {
+      allow read: if true;
+      allow write: if isAuth() && isImage() && isUnder(5);
+    }
+
+    // ═══════════════════════════════════════════
+    // TOURNAMENT MEDIA
+    // ═══════════════════════════════════════════
+    match /tournaments/{tourneyId}/{fileName} {
+      allow read: if true;
+      allow write: if isAuth() && isImage() && isUnder(10);
+    }
+
+    // ═══════════════════════════════════════════
+    // NEWS IMAGES
+    // ═══════════════════════════════════════════
+    match /news/{articleId}/{fileName} {
+      allow read: if true;
+      allow write: if isAuth() && isImage() && isUnder(10);
+    }
+
+    // ═══════════════════════════════════════════
+    // AD CREATIVES
+    // ═══════════════════════════════════════════
+    match /ads/{adId}/{fileName} {
+      allow read: if true;
+      allow write: if isAuth() && isMediaFile() && isUnder(15);
+    }
+
+    // Deny everything else
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

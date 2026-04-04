@@ -1,0 +1,309 @@
+import { useState, useEffect, useRef } from 'react';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { db, auth } from '../../firebase/config';
+import { getUser } from '../../firebase/firestore';
+import { createPeerConnection, createOffer, answerCall, endCallCleanup, getMediaStream } from '../../utils/webrtc';
+import Icon from '../../components/Icon';
+import UserAvatar from '../../components/UserAvatar';
+
+export default function CallScreen() {
+  const { chatId, callType } = useParams();
+  const [params] = useSearchParams();
+  const role = params.get('role') || 'caller';
+  const navigate = useNavigate();
+
+  const [status, setStatus] = useState('connecting'); // connecting, ringing, active, ended, failed
+  const [elapsed, setElapsed] = useState(0);
+  const [muted, setMuted] = useState(false);
+  const [videoOff, setVideoOff] = useState(callType === 'voice');
+  const [speakerOn, setSpeakerOn] = useState(false);
+  const [otherUser, setOtherUser] = useState(null);
+  const [showControls, setShowControls] = useState(true);
+
+  const pcRef = useRef(null);
+  const localStreamRef = useRef(null);
+  const remoteStreamRef = useRef(null);
+  const localVideoRef = useRef(null);
+  const remoteVideoRef = useRef(null);
+  const timerRef = useRef(null);
+  const cleanupRef = useRef(null);
+
+  // Load other user's info
+  useEffect(() => {
+    if (!chatId) return;
+    const otherUid = chatId.split('_').find(id => id !== auth.currentUser?.uid);
+    if (otherUid) getUser(otherUid).then(setOtherUser).catch(() => {});
+  }, [chatId]);
+
+  // Main WebRTC setup
+  useEffect(() => {
+    if (!chatId) return;
+    let mounted = true;
+
+    const setup = async () => {
+      try {
+        // Get media
+        const stream = await getMediaStream(callType === 'video' ? 'video' : 'audio');
+        if (!mounted) { stream.getTracks().forEach(t => t.stop()); return; }
+        localStreamRef.current = stream;
+
+        if (localVideoRef.current) {
+          localVideoRef.current.srcObject = stream;
+        }
+
+        // Create peer connection
+        const pc = createPeerConnection();
+        pcRef.current = pc;
+
+        // Remote stream
+        const remoteStream = new MediaStream();
+        remoteStreamRef.current = remoteStream;
+
+        pc.ontrack = (event) => {
+          event.streams[0].getTracks().forEach(track => {
+            remoteStream.addTrack(track);
+          });
+          if (remoteVideoRef.current) {
+            remoteVideoRef.current.srcObject = remoteStream;
+          }
+          if (mounted) setStatus('active');
+        };
+
+        pc.oniceconnectionstatechange = () => {
+          if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+            if (mounted) setStatus('active');
+          }
+          if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
+            if (mounted) setStatus('failed');
+          }
+        };
+
+        // Caller creates offer, callee answers
+        if (role === 'callee') {
+          setStatus('connecting');
+          cleanupRef.current = await answerCall(chatId, pc, stream);
+        } else {
+          setStatus('ringing');
+          cleanupRef.current = await createOffer(chatId, pc, stream);
+        }
+      } catch (err) {
+        console.error('WebRTC setup error:', err);
+        if (mounted) setStatus('failed');
+      }
+    };
+
+    setup();
+
+    return () => {
+      mounted = false;
+      if (cleanupRef.current) cleanupRef.current();
+    };
+  }, [chatId, callType, role]);
+
+  // Listen for status changes (caller hangup, etc)
+  useEffect(() => {
+    if (!chatId) return;
+    const unsub = onSnapshot(doc(db, 'calls', chatId), (snap) => {
+      if (!snap.exists()) { handleEnd(); return; }
+      const data = snap.data();
+      if (data.status === 'ended') handleEnd();
+      if (data.status === 'active' && status === 'ringing') setStatus('active');
+    });
+    return () => unsub();
+  }, [chatId, status]);
+
+  // Call timer
+  useEffect(() => {
+    if (status === 'active') {
+      timerRef.current = setInterval(() => setElapsed(e => e + 1), 1000);
+    }
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [status]);
+
+  // Auto-hide controls after 4s in video call
+  useEffect(() => {
+    if (callType !== 'video' || status !== 'active') return;
+    const timer = setTimeout(() => setShowControls(false), 4000);
+    return () => clearTimeout(timer);
+  }, [showControls, callType, status]);
+
+  const handleEnd = async () => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    if (cleanupRef.current) cleanupRef.current();
+    await endCallCleanup(chatId, pcRef.current, localStreamRef.current);
+    navigate(-1);
+  };
+
+  const toggleMute = () => {
+    const audioTrack = localStreamRef.current?.getAudioTracks()[0];
+    if (audioTrack) {
+      audioTrack.enabled = !audioTrack.enabled;
+      setMuted(!audioTrack.enabled);
+    }
+  };
+
+  const toggleVideo = () => {
+    const videoTrack = localStreamRef.current?.getVideoTracks()[0];
+    if (videoTrack) {
+      videoTrack.enabled = !videoTrack.enabled;
+      setVideoOff(!videoTrack.enabled);
+    }
+  };
+
+  const formatTime = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+
+  const isVideo = callType === 'video';
+
+  return (
+    <div className="fixed inset-0 bg-bg-dark z-[100] flex flex-col overflow-hidden"
+      onClick={() => isVideo && setShowControls(true)}>
+
+      {/* === VIDEO CALL LAYOUT === */}
+      {isVideo ? (
+        <>
+          {/* Remote video — full screen */}
+          <div className="absolute inset-0 bg-black">
+            <video ref={remoteVideoRef} autoPlay playsInline
+              className="w-full h-full object-cover" />
+            {status !== 'active' && (
+              <div className="absolute inset-0 bg-bg-dark flex items-center justify-center">
+                <div className="text-center">
+                  <UserAvatar src={otherUser?.avatar} size={96} />
+                  <p className="text-white font-syne text-xl font-bold mt-4">{otherUser?.displayName || 'Connecting...'}</p>
+                  <p className="text-brand-cyan text-sm mt-2 animate-pulse">
+                    {status === 'ringing' ? 'Ringing...' : status === 'failed' ? 'Connection failed' : 'Connecting...'}
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Local video — picture in picture */}
+          <div className="absolute top-16 right-4 w-28 h-40 rounded-2xl overflow-hidden border-2 border-white/20 shadow-2xl z-30 bg-surface-2">
+            <video ref={localVideoRef} autoPlay playsInline muted
+              className={`w-full h-full object-cover ${videoOff ? 'hidden' : ''}`} />
+            {videoOff && (
+              <div className="w-full h-full flex items-center justify-center">
+                <Icon name="videocam_off" size={24} className="text-text-muted" />
+              </div>
+            )}
+          </div>
+
+          {/* Top bar — fades with controls */}
+          <div className={`absolute top-0 left-0 right-0 px-5 pt-5 pb-12 bg-gradient-to-b from-black/70 to-transparent z-20 transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+            <div className="flex items-center gap-3">
+              <div className="w-2 h-2 rounded-full bg-green-500 " />
+              <div className="flex-1">
+                <p className="text-white text-sm font-bold">{otherUser?.displayName || 'Unknown'}</p>
+                <p className="text-white/60 text-xs font-dmmono">
+                  {status === 'active' ? formatTime(elapsed) : status === 'ringing' ? 'Ringing...' : 'Connecting...'}
+                </p>
+              </div>
+              <span className="text-white/30 text-[8px] font-dmmono uppercase tracking-widest">P2P Encrypted</span>
+            </div>
+          </div>
+        </>
+      ) : (
+        /* === AUDIO CALL LAYOUT === */
+        <div className="flex-1 flex flex-col items-center justify-center px-8 relative">
+          {/* Ambient background */}
+          <div className="absolute inset-0 overflow-hidden">
+            <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-brand-cyan/5 rounded-full blur-3xl" />
+            <div className="absolute bottom-1/4 right-1/4 w-48 h-48 bg-brand-violet/5 rounded-full blur-3xl" />
+          </div>
+
+          {/* Encrypted badge */}
+          <div className="absolute top-8 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1 rounded-full bg-surface-2/50 border border-white/[0.04]">
+            <Icon name="lock" size={10} className="text-brand-cyan" />
+            <span className="text-[9px] text-text-muted font-dmmono uppercase tracking-widest">P2P Encrypted</span>
+          </div>
+
+          {/* Avatar with animated ring */}
+          <div className="relative mb-8 z-10">
+            {status === 'ringing' && (
+              <>
+                <div className="absolute inset-0 w-40 h-40 -m-6 rounded-full border-2 border-brand-cyan/20 animate-ping" style={{ animationDuration: '2s' }} />
+                <div className="absolute inset-0 w-36 h-36 -m-4 rounded-full border border-brand-cyan/10 animate-ping" style={{ animationDuration: '3s' }} />
+              </>
+            )}
+            {status === 'active' && (
+              <div className="absolute inset-0 w-32 h-32 -m-2 rounded-full border-2 border-brand-cyan/30 animate-pulse" />
+            )}
+            <UserAvatar src={otherUser?.avatar} size={112} />
+          </div>
+
+          {/* Name + status */}
+          <h2 className="font-syne text-2xl font-bold text-text-primary mb-1 z-10">{otherUser?.displayName || 'Unknown'}</h2>
+          <p className="text-text-muted text-sm font-dmmono mb-1 z-10">@{otherUser?.username || 'user'}</p>
+
+          {status === 'active' ? (
+            <div className="flex items-center gap-2 z-10">
+              <div className="w-2 h-2 rounded-full bg-green-500 " />
+              <p className="text-brand-cyan text-lg font-dmmono font-bold">{formatTime(elapsed)}</p>
+            </div>
+          ) : (
+            <p className={`text-sm z-10 ${status === 'failed' ? 'text-brand-ember' : 'text-text-muted animate-pulse'}`}>
+              {status === 'ringing' ? 'Ringing...' : status === 'failed' ? 'Connection failed — try WiFi or mobile data' : 'Connecting...'}
+            </p>
+          )}
+
+          {/* Hidden audio elements */}
+          <audio ref={remoteVideoRef} autoPlay playsInline className="hidden" />
+          <audio ref={localVideoRef} autoPlay playsInline muted className="hidden" />
+        </div>
+      )}
+
+      {/* === CONTROLS BAR === */}
+      <div className={`${isVideo ? 'absolute bottom-0 left-0 right-0 z-20' : 'relative'} transition-opacity duration-300 ${isVideo && !showControls ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+        <div className={`${isVideo ? 'bg-gradient-to-t from-black/80 to-transparent pt-16' : ''} pb-10 px-6`}>
+          <div className="flex items-center justify-center gap-5">
+            {/* Mute */}
+            <button onClick={toggleMute}
+              className={`w-14 h-14 rounded-full flex items-center justify-center transition-all ${muted ? 'bg-white/20 backdrop-blur' : 'bg-surface-2/80 backdrop-blur'}`}>
+              <Icon name={muted ? 'mic_off' : 'mic'} size={24} className={muted ? 'text-brand-ember' : 'text-white'} />
+            </button>
+
+            {/* Video toggle (video calls only) */}
+            {isVideo && (
+              <button onClick={toggleVideo}
+                className={`w-14 h-14 rounded-full flex items-center justify-center transition-all ${videoOff ? 'bg-white/20 backdrop-blur' : 'bg-surface-2/80 backdrop-blur'}`}>
+                <Icon name={videoOff ? 'videocam_off' : 'videocam'} size={24} className={videoOff ? 'text-brand-ember' : 'text-white'} />
+              </button>
+            )}
+
+            {/* End call */}
+            <button onClick={handleEnd}
+              className="w-16 h-16 rounded-full bg-brand-ember flex items-center justify-center  hover:scale-105 active:scale-95 transition-all">
+              <Icon name="call_end" size={28} className="text-white" />
+            </button>
+
+            {/* Speaker (audio calls only) */}
+            {!isVideo && (
+              <button onClick={() => setSpeakerOn(!speakerOn)}
+                className={`w-14 h-14 rounded-full flex items-center justify-center transition-all ${speakerOn ? 'bg-brand-cyan/20' : 'bg-surface-2/80 backdrop-blur'}`}>
+                <Icon name={speakerOn ? 'volume_up' : 'volume_down'} size={24} className={speakerOn ? 'text-brand-cyan' : 'text-white'} />
+              </button>
+            )}
+
+            {/* Flip camera (video calls only) */}
+            {isVideo && (
+              <button className="w-14 h-14 rounded-full bg-surface-2/80 backdrop-blur flex items-center justify-center">
+                <Icon name="flip_camera_ios" size={24} className="text-white" />
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Failed state — retry button */}
+      {status === 'failed' && (
+        <div className="absolute bottom-32 left-1/2 -translate-x-1/2 z-30">
+          <button onClick={() => window.location.reload()} className="px-6 py-3 rounded-full bg-brand-cyan text-bg-dark font-bold text-sm flex items-center gap-2">
+            <Icon name="refresh" size={18} /> Retry
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}

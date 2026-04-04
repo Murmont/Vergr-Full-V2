@@ -1,0 +1,134 @@
+import { useState, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { doc, updateDoc } from 'firebase/firestore';
+import { auth, storage, db } from '../../firebase/config';
+import { SiTwitch, SiDiscord, SiYoutube, SiSteam } from 'react-icons/si'; // Professional brand logos
+import TopBar from '../../components/TopBar';
+import Icon from '../../components/Icon';
+
+export default function ProfileSetupScreen() {
+  const [bio, setBio] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const fileInputRef = useRef(null);
+  const navigate = useNavigate();
+
+  const handleFileClick = () => fileInputRef.current?.click();
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file || !auth.currentUser) return;
+
+    // Show local preview immediately
+    setPreviewUrl(URL.createObjectURL(file));
+    setUploading(true);
+
+    try {
+      // Path matches your strict storage rules: users/{userId}/avatar/{fileName}
+      const storagePath = `users/${auth.currentUser.uid}/avatar/${Date.now()}_${file.name}`;
+      const storageRef = ref(storage, storagePath);
+      
+      const snapshot = await uploadBytes(storageRef, file);
+      const downloadURL = await getDownloadURL(snapshot.ref);
+
+      // Update Firestore in the 'vgrdb' database
+      const userRef = doc(db, 'users', auth.currentUser.uid);
+      await updateDoc(userRef, {
+        avatar: downloadURL,
+        updatedAt: new Date()
+      });
+
+      console.log("Avatar uploaded successfully!");
+    } catch (error) {
+      console.error("Upload failed:", error);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div className="screen-container min-h-screen">
+      <TopBar title="Set Up Profile" showBack />
+      
+      {/* Required for the browser to open the photo gallery */}
+      <input 
+        type="file" 
+        ref={fileInputRef} 
+        onChange={handleFileChange} 
+        accept="image/*" 
+        className="hidden" 
+      />
+
+      <div className="flex-1 px-4 pb-32">
+        <div className="flex flex-col items-center mb-8 mt-4">
+          <div className="relative cursor-pointer" onClick={handleFileClick}>
+            <div className="w-24 h-24 rounded-full bg-surface-2 border-2 border-dashed border-white/[0.06] flex items-center justify-center overflow-hidden">
+              {previewUrl ? (
+                <img src={previewUrl} className="w-full h-full object-cover" alt="Avatar" />
+              ) : (
+                <Icon name="add_a_photo" size={32} className="text-text-muted" />
+              )}
+              {uploading && (
+                <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                  <div className="w-6 h-6 border-2 border-brand-cyan border-t-transparent animate-spin rounded-full"></div>
+                </div>
+              )}
+            </div>
+            <button className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-brand-cyan flex items-center justify-center">
+              <Icon name="edit" size={16} className="text-bg-dark" />
+            </button>
+          </div>
+          <p className="text-text-secondary text-sm mt-3">
+            {uploading ? "Uploading..." : "Tap to upload avatar"}
+          </p>
+        </div>
+
+        <div className="mb-6">
+          <label className="text-text-secondary text-sm mb-2 block">Bio</label>
+          <textarea
+            value={bio} onChange={e => setBio(e.target.value)} maxLength={150}
+            placeholder="Tell gamers about yourself..."
+            className="w-full bg-surface-2 border border-white/[0.06] rounded-2xl p-4 text-text-primary placeholder:text-text-muted focus:border-brand-cyan focus:ring-1 focus:ring-brand-cyan focus:outline-none transition-all h-28 resize-none text-sm"
+          />
+          <p className="text-text-muted text-xs text-right mt-1">{bio.length}/150</p>
+        </div>
+
+        <h3 className="text-text-primary font-semibold mb-3">Link Gaming Accounts</h3>
+        <div className="space-y-3">
+          {[
+            { name: 'Twitch', icon: <SiTwitch />, color: '#9146FF' },
+            { name: 'Discord', icon: <SiDiscord />, color: '#5865F2' },
+            { name: 'YouTube', icon: <SiYoutube />, color: '#FF0000' },
+            { name: 'Steam', icon: <SiSteam />, color: '#66c0f4' }, // Official Vibrant Steam Blue
+          ].map(platform => (
+            <button key={platform.name}
+              className="w-full flex items-center justify-between px-4 py-3.5 rounded-2xl border border-white/[0.06] bg-surface-2 hover:border-white/[0.12] transition-colors">
+              <div className="flex items-center gap-3">
+                <span className="text-xl" style={{ color: platform.color }}>{platform.icon}</span>
+                <span className="text-text-primary text-sm font-medium">{platform.name}</span>
+              </div>
+              <span className="text-brand-cyan text-sm font-semibold">Connect</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[480px] p-4 glass-header border-t border-white/[0.04]">
+        <button 
+          onClick={() => navigate('/setup/follow-suggestions')} 
+          disabled={uploading}
+          className={`btn-primary ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}
+        >
+          Continue
+        </button>
+        <button 
+          onClick={() => navigate('/setup/follow-suggestions')} 
+          className="w-full text-text-muted text-sm mt-3 text-center"
+        >
+          Skip for now
+        </button>
+      </div>
+    </div>
+  );
+}

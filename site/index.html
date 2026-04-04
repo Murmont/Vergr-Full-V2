@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VERGR — Where Gamers Converge</title>
+  <meta name="description" content="Compete in tournaments, earn real rewards, and connect with your squad. The gaming social platform built for competitors." />
+  <meta name="theme-color" content="#07080D" />
+  <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+  <link rel="icon" href="/icons/icon-192.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,1,0&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+  <style>
+    /* Page-specific hero enhancements */
+    .hero-bg-pattern {
+      position: absolute; inset: 0; z-index: 0;
+      background: url('/backgrounds/static/bg_1.png') center/cover no-repeat;
+      opacity: 0.3;
+    }
+    [data-theme='light'] .hero-bg-pattern {
+      opacity: 0.25; filter: brightness(0.7) saturate(0.6);
+    }
+    .hero-gradient-overlay {
+      position: absolute; inset: 0; z-index: 1;
+      background:
+        radial-gradient(ellipse 60% 50% at 50% 40%, rgba(123,111,255,0.12) 0%, transparent 70%),
+        radial-gradient(ellipse 40% 40% at 30% 60%, rgba(77,255,212,0.08) 0%, transparent 60%),
+        radial-gradient(ellipse 40% 40% at 70% 60%, rgba(200,127,255,0.08) 0%, transparent 60%),
+        linear-gradient(180deg, transparent 60%, var(--bg) 100%);
+    }
+    .hero-content { z-index: 2; }
+
+    /* Animated border on the stat cards */
+    .stat-card {
+      position: relative; padding: 24px; border-radius: 16px;
+      background: var(--card-bg); border: 1px solid var(--border);
+      overflow: hidden; text-align: center;
+    }
+    .stat-card::before {
+      content: ''; position: absolute; top: -1px; left: 0; right: 0; height: 3px;
+      background: var(--brand-gradient); opacity: 0;
+      transition: opacity 0.3s;
+    }
+    .stat-card:hover::before { opacity: 1; }
+    .stat-card .stat-value {
+      font-family: 'Syne', sans-serif; font-weight: 800; font-size: 2rem;
+      margin-bottom: 4px;
+    }
+    .stat-card .stat-label {
+      font-size: 13px; color: var(--text-muted); text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    /* Feature icon colors */
+    .icon-cyan { background: rgba(77,255,212,0.1); color: var(--brand-cyan); }
+    .icon-violet { background: rgba(123,111,255,0.1); color: var(--brand-violet); }
+    .icon-gold { background: rgba(245,197,66,0.1); color: var(--brand-gold); }
+    .icon-ember { background: rgba(255,77,106,0.1); color: var(--brand-ember); }
+    .icon-pink { background: rgba(200,127,255,0.1); color: var(--brand-pink); }
+
+    /* CTA banner */
+    .cta-banner {
+      position: relative; border-radius: 24px; overflow: hidden;
+      padding: 64px 32px; text-align: center;
+    }
+    .cta-banner-bg {
+      position: absolute; inset: 0;
+      background: url('/backgrounds/static/bg_2.png') center/cover no-repeat;
+      opacity: 0.4;
+    }
+    .cta-banner-gradient {
+      position: absolute; inset: 0;
+      background: linear-gradient(135deg, rgba(123,111,255,0.85) 0%, rgba(200,127,255,0.85) 100%);
+    }
+    .cta-banner-content { position: relative; z-index: 1; }
+
+    /* Comparison table */
+    .compare-table {
+      width: 100%; border-collapse: collapse; border-radius: 16px; overflow: hidden;
+      font-size: 14px;
+    }
+    .compare-table th, .compare-table td {
+      padding: 16px 20px; text-align: left; border-bottom: 1px solid var(--border);
+    }
+    .compare-table th {
+      background: var(--surface-2); font-family: 'Syne', sans-serif;
+      font-weight: 700; font-size: 13px; text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--text-muted);
+    }
+    .compare-table td { color: var(--text-secondary); }
+    .compare-table tr:last-child td { border-bottom: none; }
+    .compare-table .highlight td {
+      background: rgba(77,255,212,0.04); color: var(--text-primary); font-weight: 600;
+    }
+    .compare-table .highlight td:first-child { color: var(--brand-cyan); }
+  </style>
+</head>
+<body>
+  <!-- ═══ THEME INIT (before paint) ═══ -->
+  <script>
+    (function(){var t='dark';try{t=localStorage.getItem('vergr_theme')||'dark'}catch(e){}
+    var r=t==='system'?(window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):t;
+    document.documentElement.setAttribute('data-theme',r);document.documentElement.className=r;})();
+  </script>
+
+  <!-- ═══ NAVIGATION ═══ -->
+  <nav class="site-nav">
+    <div class="nav-inner">
+      <a href="/" class="logo text-gradient">VERGR</a>
+      <ul class="nav-links">
+        <li><a href="/" class="active">Home</a></li>
+        <li><a href="/store">Coin Store</a></li>
+        <li><a href="/download">Download</a></li>
+        <li><a href="/help">Help</a></li>
+        <li><a href="/app" class="btn-primary" style="height:40px;padding:0 20px;font-size:13px;">Open App</a></li>
+      </ul>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <button class="theme-toggle" title="Toggle theme">
+          <span class="icon-sun material-symbols-outlined" style="font-size:20px;">light_mode</span>
+          <span class="icon-moon material-symbols-outlined" style="font-size:20px;">dark_mode</span>
+        </button>
+        <button class="nav-toggle" aria-label="Menu" aria-expanded="false">
+          <span class="material-symbols-outlined">menu</span>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ═══ HERO ═══ -->
+  <section class="hero">
+    <div class="hero-bg-pattern"></div>
+    <div class="hero-gradient-overlay"></div>
+    <div class="hero-content animate-fade-up">
+      <div class="badge-violet" style="margin-bottom:20px;display:inline-flex;border-radius:9999px;">
+        <span class="material-symbols-outlined" style="font-size:14px;margin-right:4px;">bolt</span>
+        Now in Early Access
+      </div>
+      <h1>Where Gamers<br><span class="text-gradient">Converge</span></h1>
+      <p class="subtitle">Compete in tournaments. Earn real rewards. Build your squad. The social platform where your skill pays off.</p>
+      <div class="btn-row">
+        <a href="/app" class="btn-primary">
+          <span class="material-symbols-outlined" style="font-size:20px;">play_arrow</span>
+          Launch App
+        </a>
+        <a href="/download" class="btn-secondary">
+          <span class="material-symbols-outlined" style="font-size:20px;">download</span>
+          Download
+        </a>
+      </div>
+      <p style="margin-top:16px;font-size:13px;color:var(--text-muted);">
+        Free to join · Web, Windows, iOS & Android
+      </p>
+    </div>
+  </section>
+
+  <!-- ═══ STATS ═══ -->
+  <section class="section" style="padding-top:0;margin-top:-40px;position:relative;z-index:2;">
+    <div class="container">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px;">
+        <div class="stat-card animate-fade-up delay-1" data-animate>
+          <div class="stat-value text-gradient">10%</div>
+          <div class="stat-label">Withdrawal Commission</div>
+        </div>
+        <div class="stat-card animate-fade-up delay-2" data-animate>
+          <div class="stat-value" style="color:var(--brand-gold);">3 Days</div>
+          <div class="stat-label">Fast Payouts</div>
+        </div>
+        <div class="stat-card animate-fade-up delay-3" data-animate>
+          <div class="stat-value" style="color:var(--brand-violet);">€10</div>
+          <div class="stat-label">Min Withdrawal</div>
+        </div>
+        <div class="stat-card animate-fade-up delay-4" data-animate>
+          <div class="stat-value" style="color:var(--brand-ember);">100</div>
+          <div class="stat-label">Squad Members</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ FEATURES ═══ -->
+  <section class="section" id="features">
+    <div class="container">
+      <div data-animate>
+        <span class="section-label">Features</span>
+        <h2 class="section-title">Everything you need.<br><span class="text-gradient">Nothing you don't.</span></h2>
+        <p class="section-desc" style="margin-bottom:48px;">Built by gamers, for gamers. Every feature exists because the community asked for it.</p>
+      </div>
+      <div class="features-grid">
+        <div class="card feature-card" data-animate>
+          <div class="icon-wrap icon-gold">
+            <span class="material-symbols-outlined">emoji_events</span>
+          </div>
+          <h3>Tournaments</h3>
+          <p>Host or join squad tournaments with real coin entry fees. Winners take home Gems — convertible to real money. Your stream, your rules.</p>
+        </div>
+        <div class="card feature-card" data-animate>
+          <div class="icon-wrap icon-cyan">
+            <span class="material-symbols-outlined">group</span>
+          </div>
+          <h3>Squads</h3>
+          <p>Form a squad of 100. Every tournament win funnels 25% to the squad pot — distributed equally each month. Rise together.</p>
+        </div>
+        <div class="card feature-card" data-animate>
+          <div class="icon-wrap icon-violet">
+            <span class="material-symbols-outlined">storefront</span>
+          </div>
+          <h3>Marketplace</h3>
+          <p>Sell coaching, boosting, or creative services with built-in escrow. Your reputation unlocks better rates as you level up.</p>
+        </div>
+        <div class="card feature-card" data-animate>
+          <div class="icon-wrap icon-ember">
+            <span class="material-symbols-outlined">live_tv</span>
+          </div>
+          <h3>Live Streams</h3>
+          <p>Link your Twitch, YouTube, or Kick stream. Viewers interact through VERGR chat — it syncs with Twitch IRC in real time.</p>
+        </div>
+        <div class="card feature-card" data-animate>
+          <div class="icon-wrap icon-pink">
+            <span class="material-symbols-outlined">chat</span>
+          </div>
+          <h3>Messaging</h3>
+          <p>Telegram-quality DMs and group chats with P2P encryption, voice & video calls, stickers, and ephemeral messages. Clean and private.</p>
+        </div>
+        <div class="card feature-card" data-animate>
+          <div class="icon-wrap icon-gold">
+            <span class="material-symbols-outlined">trending_up</span>
+          </div>
+          <h3>Coin Economy</h3>
+          <p>Buy Coins, tip creators, boost posts, and enter tournaments. Earn Gems through engagement, then withdraw as real money. Your grind has value.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ CONNECT YOUR STREAMS ═══ -->
+  <section class="section">
+    <div class="container" style="text-align:center;">
+      <div data-animate>
+        <span class="section-label" style="justify-content:center;">Get Started</span>
+        <h2 class="section-title">Connect your streams.<br><span class="text-gradient">We handle the rest.</span></h2>
+        <p class="section-desc" style="margin:0 auto 40px;max-width:520px;">Link your Twitch, YouTube, or Kick account and your streams go live on VERGR instantly. Your viewers can watch, chat, and tip — all without leaving the app.</p>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;max-width:800px;margin:0 auto;">
+        <div class="card" style="text-align:center;padding:28px;" data-animate>
+          <div style="width:56px;height:56px;border-radius:14px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;background:rgba(145,70,255,0.1);">
+            <span class="material-symbols-outlined" style="font-size:28px;color:#9146FF;">videocam</span>
+          </div>
+          <strong style="font-size:16px;">Twitch</strong>
+          <p style="font-size:13px;color:var(--text-secondary);margin-top:6px;">Full IRC chat sync — your Twitch chat appears in VERGR and vice versa.</p>
+        </div>
+        <div class="card" style="text-align:center;padding:28px;" data-animate>
+          <div style="width:56px;height:56px;border-radius:14px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;background:rgba(255,0,0,0.08);">
+            <span class="material-symbols-outlined" style="font-size:28px;color:#FF0000;">play_circle</span>
+          </div>
+          <strong style="font-size:16px;">YouTube</strong>
+          <p style="font-size:13px;color:var(--text-secondary);margin-top:6px;">Embed your YouTube livestream directly into tournament match pages.</p>
+        </div>
+        <div class="card" style="text-align:center;padding:28px;" data-animate>
+          <div style="width:56px;height:56px;border-radius:14px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;background:rgba(83,252,24,0.08);">
+            <span class="material-symbols-outlined" style="font-size:28px;color:#53FC18;">live_tv</span>
+          </div>
+          <strong style="font-size:16px;">Kick</strong>
+          <p style="font-size:13px;color:var(--text-secondary);margin-top:6px;">Link your Kick stream and let your audience follow you across platforms.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ HOW IT WORKS ═══ -->
+  <section class="section" style="background:var(--surface-1);">
+    <div class="container">
+      <div style="text-align:center;" data-animate>
+        <span class="section-label" style="justify-content:center;">How it works</span>
+        <h2 class="section-title">From zero to earning<br><span class="text-gradient">in four steps</span></h2>
+      </div>
+      <div class="steps" style="margin-top:48px;">
+        <div class="step" data-animate>
+          <h3>Sign Up</h3>
+          <p>Create your account with Google. Customize your profile and pick your main games.</p>
+        </div>
+        <div class="step" data-animate>
+          <h3>Get Coins</h3>
+          <p>Purchase Coin bundles starting from €1.00 on web. Mobile users can buy through the app store.</p>
+        </div>
+        <div class="step" data-animate>
+          <h3>Compete & Earn</h3>
+          <p>Join tournaments, tip and get tipped, sell services, and complete quests to earn XP and Gems.</p>
+        </div>
+        <div class="step" data-animate>
+          <h3>Withdraw</h3>
+          <p>Cash out your Gems to your bank account. Min €10, 3-day escrow for security. That's it.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ COMPARISON ═══ -->
+  <section class="section" id="compare">
+    <div class="container">
+      <div data-animate>
+        <span class="section-label">Why VERGR</span>
+        <h2 class="section-title">Better terms.<br><span class="text-gradient">Better payouts.</span></h2>
+        <p class="section-desc" style="margin-bottom:40px;">Other platforms take half. We start at 30% and drop to 10% as you level up. Your earnings are yours.</p>
+      </div>
+      <div style="overflow-x:auto;border-radius:16px;border:1px solid var(--border);" data-animate>
+        <table class="compare-table">
+          <thead>
+            <tr>
+              <th>Platform</th>
+              <th>Commission</th>
+              <th>Min. Withdrawal</th>
+              <th>Payout Speed</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Twitch (Subs)</td>
+              <td>50%</td>
+              <td>$50 – $100</td>
+              <td>15 – 45 days</td>
+            </tr>
+            <tr>
+              <td>TikTok (Gifts)</td>
+              <td>50%</td>
+              <td>$10 – $100</td>
+              <td>1 – 15 days</td>
+            </tr>
+            <tr class="highlight">
+              <td>VERGR</td>
+              <td>10% – 30%</td>
+              <td>€10 (1,000 Gems)</td>
+              <td>3 days (escrow)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ ECONOMY TEASER ═══ -->
+  <section class="section" style="background:var(--surface-1);">
+    <div class="container">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:center;" data-animate>
+        <div>
+          <span class="section-label">The Economy</span>
+          <h2 class="section-title">Your skill,<br><span class="text-gradient">your currency</span></h2>
+          <p class="section-desc" style="margin-bottom:24px;">VERGR runs on a dual-currency system designed to reward active players and protect the ecosystem.</p>
+          <div style="display:flex;flex-direction:column;gap:16px;">
+            <div style="display:flex;gap:12px;align-items:start;">
+              <div class="badge-gold" style="flex-shrink:0;margin-top:2px;">
+                <span class="material-symbols-outlined" style="font-size:14px;">toll</span>
+              </div>
+              <div>
+                <strong style="font-size:15px;">Coins</strong>
+                <p style="font-size:13px;color:var(--text-secondary);margin-top:2px;">Utility currency — buy, tip, boost, and enter tournaments. 1 Coin = €0.01.</p>
+              </div>
+            </div>
+            <div style="display:flex;gap:12px;align-items:start;">
+              <div class="badge-cyan" style="flex-shrink:0;margin-top:2px;">
+                <span class="material-symbols-outlined" style="font-size:14px;">diamond</span>
+              </div>
+              <div>
+                <strong style="font-size:15px;">Gems</strong>
+                <p style="font-size:13px;color:var(--text-secondary);margin-top:2px;">Withdrawal currency — earned through tips, services, and tournament wins. 1,000 Gems = €10.00.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:12px;">
+          <div class="card" style="text-align:center;">
+            <div class="font-mono" style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">COMMISSION RATE</div>
+            <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:2.5rem;line-height:1;">
+              <span class="text-gradient">30%</span>
+              <span style="font-size:1rem;color:var(--text-muted);vertical-align:middle;"> → </span>
+              <span class="text-gradient">10%</span>
+            </div>
+            <div style="font-size:13px;color:var(--text-secondary);margin-top:8px;">As you level up from 1 → 100</div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div class="card" style="text-align:center;">
+              <div style="font-size:13px;color:var(--text-muted);margin-bottom:4px;">Tournament Split</div>
+              <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:1.5rem;color:var(--brand-gold);">75/25</div>
+              <div style="font-size:12px;color:var(--text-secondary);">Player / Squad</div>
+            </div>
+            <div class="card" style="text-align:center;">
+              <div style="font-size:13px;color:var(--text-muted);margin-bottom:4px;">Escrow Hold</div>
+              <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:1.5rem;color:var(--brand-violet);">72h</div>
+              <div style="font-size:12px;color:var(--text-secondary);">For security</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <style>
+      @media (max-width: 768px) {
+        .container > [style*="grid-template-columns:1fr 1fr"] {
+          grid-template-columns: 1fr !important;
+        }
+      }
+    </style>
+  </section>
+
+  <!-- ═══ CTA BANNER ═══ -->
+  <section class="section">
+    <div class="container">
+      <div class="cta-banner" data-animate>
+        <div class="cta-banner-bg"></div>
+        <div class="cta-banner-gradient"></div>
+        <div class="cta-banner-content">
+          <h2 style="font-family:'Syne',sans-serif;font-weight:800;font-size:clamp(1.75rem,4vw,2.5rem);color:#fff;margin-bottom:12px;">
+            Ready to compete?
+          </h2>
+          <p style="font-size:16px;color:rgba(255,255,255,0.8);max-width:440px;margin:0 auto 28px;">
+            Join the early access and be among the first to build your squad, host tournaments, and earn.
+          </p>
+          <div class="btn-row">
+            <a href="/app" class="btn-primary" style="background:#fff;color:#7B6FFF;">
+              <span class="material-symbols-outlined" style="font-size:20px;">rocket_launch</span>
+              Get Started Free
+            </a>
+            <a href="/store" class="btn-secondary" style="border-color:rgba(255,255,255,0.3);color:#fff;">
+              <span class="material-symbols-outlined" style="font-size:20px;">toll</span>
+              View Coin Store
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ FOOTER ═══ -->
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-inner">
+        <div class="footer-col">
+          <a href="/" class="logo text-gradient font-syne" style="font-size:20px;font-weight:800;display:inline-block;margin-bottom:8px;">VERGR</a>
+          <p style="font-size:13px;color:var(--text-muted);max-width:240px;">
+            The gaming social platform where your skill pays off.
+          </p>
+        </div>
+        <div class="footer-col">
+          <h4>Platform</h4>
+          <a href="/app">Open App</a>
+          <a href="/download">Download</a>
+          <a href="/store">Coin Store</a>
+          <a href="/help">Help Center</a>
+        </div>
+        <div class="footer-col">
+          <h4>Legal</h4>
+          <a href="/privacy">Privacy Policy</a>
+          <a href="/terms">Terms of Service</a>
+        </div>
+        <div class="footer-col">
+          <h4>Connect</h4>
+          <a href="#" target="_blank">Discord</a>
+          <a href="#" target="_blank">Twitter / X</a>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span>&copy; 2025 VERGR. All rights reserved.</span>
+        <span style="font-family:'DM Mono',monospace;font-size:12px;">Built with 🔥 for gamers</span>
+      </div>
+    </div>
+  </footer>
+
+  <script src="/shared.js"></script>
+</body>
+</html>
