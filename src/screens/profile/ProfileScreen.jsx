@@ -7,6 +7,7 @@ import { useUI } from '../../context/UIContext';
 import { getUserPosts, getBookmarks } from '../../firebase/firestore';
 import { useLayout } from '../../context/LayoutContext';
 import useResponsive from '../../hooks/useResponsive';
+import useTier from '../../hooks/useTier';
 import UserAvatar from '../../components/UserAvatar';
 import CoinDisplay from '../../components/CoinDisplay';
 import Icon from '../../components/Icon';
@@ -30,6 +31,8 @@ export default function ProfileScreen() {
   const navigate = useNavigate();
   const { isDesktop } = useResponsive();
   const { setRightPanel, setContentAlign } = useLayout();
+  const { tier } = useTier();
+  const isPro = tier === 'pro';
 
   useEffect(() => {
     setRightPanel(null);
@@ -147,6 +150,14 @@ export default function ProfileScreen() {
         <button onClick={() => navigate('/edit-profile')}
           className="w-8 h-8 flex items-center justify-center rounded-full text-text-secondary hover:text-text-primary transition-colors">
           <Icon name="edit" size={18} />
+        </button>
+        <button onClick={() => navigate('/vergrme/edit')}
+          className="w-8 h-8 flex items-center justify-center rounded-full text-text-secondary hover:text-text-primary transition-colors relative"
+          title="My Vergr.me page">
+          <Icon name="link" size={18} />
+          {isPro && (
+            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-brand-cyan" />
+          )}
         </button>
         <button onClick={() => navigate('/settings')}
           className="w-8 h-8 flex items-center justify-center rounded-full text-text-secondary hover:text-text-primary transition-colors">

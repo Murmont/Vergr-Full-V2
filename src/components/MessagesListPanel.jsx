@@ -1,36 +1,19 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
-import { db, auth } from '../firebase/config';
+import { auth } from '../firebase/config';
+import { useNotifications } from '../context/NotificationContext';
 import UserAvatar from './UserAvatar';
 import Icon from './Icon';
 import { timeAgo, getTier } from '../utils/helpers';
 
 export default function MessagesListPanel({ hideSearch = false }) {
-  const [conversations, setConversations] = useState([]);
-  const [loading, setLoading] = useState(true);
+  // Conversations come from NotificationContext's single shared listener.
+  // This used to run its own onSnapshot, doubling the read cost of every
+  // conversation update.
+  const { conversations } = useNotifications();
+  const loading = !conversations;
   const [search, setSearch] = useState('');
   const navigate = useNavigate();
-
-  useEffect(() => {
-    if (!auth.currentUser) return;
-    const q = query(
-      collection(db, 'conversations'),
-      where('participants', 'array-contains', auth.currentUser.uid),
-      where('status', '==', 'active'),
-      orderBy('lastMessageAt', 'desc')
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      setConversations(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      setLoading(false);
-    }, (error) => {
-      console.error("Inbox listener error:", error);
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, []);
 
   const filtered = search
     ? conversations.filter(c => {
@@ -52,7 +35,25 @@ export default function MessagesListPanel({ hideSearch = false }) {
   return (
     <div className="h-full flex flex-col">
       {!hideSearch && (
-        <div className="p-3 border-b border-white/[0.04]">
+        <div className="p-3 border-b border-white/[0.04] space-y-2">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => navigate('/messages/new')}
+              className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-brand-cyan/15 hover:bg-brand-cyan/25 text-brand-cyan text-xs font-bold uppercase tracking-wider transition-colors"
+              title="New Message"
+            >
+              <Icon name="edit_square" size={14} />
+              New
+            </button>
+            <button
+              onClick={() => navigate('/messages/create-group')}
+              className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-surface-2 hover:bg-surface-1 border border-white/[0.06] text-text-primary text-xs font-bold uppercase tracking-wider transition-colors"
+              title="New Group Chat"
+            >
+              <Icon name="group_add" size={14} />
+              Group
+            </button>
+          </div>
           <label className="block relative">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-text-muted">
               <Icon name="search" size={18} />

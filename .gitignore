@@ -11,3 +11,7 @@ serviceAccountKey.json
 src-tauri/target
 src-tauri/gen
 src-tauri/Cargo.lock
+
+# Built installer binary (generated; do not commit — ~10MB)
+public/downloads/VERGR-Setup.exe
+public/downloads/VERGR-Setup.msi

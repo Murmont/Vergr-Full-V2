@@ -60,11 +60,12 @@ export const stopVoiceRecording = (recorder) => {
  * @param {string} folder - Storage folder path
  * @param {string} tier - User tier: 'free' | 'lite' | 'pro'
  * @param {number} ttlDays - Days until server copy should expire
+ * @param {string} preset - Compression preset: 'chat' | 'post' | 'avatar' | 'background'
  * @returns {Promise<string>} Download URL
  */
-export const uploadMediaFile = async (file, folder = 'chat_media', tier = 'free', ttlDays = DEFAULT_TTL_DAYS) => {
+export const uploadMediaFile = async (file, folder = 'chat_media', tier = 'free', ttlDays = DEFAULT_TTL_DAYS, preset = 'chat') => {
   // Compress before upload (free CPU on user's device)
-  const compressed = await compressMedia(file, tier);
+  const compressed = await compressMedia(file, tier, preset);
 
   const fileName = `${Date.now()}_${compressed.name || 'media_file'}`;
   const storageRef = ref(storage, `${folder}/${fileName}`);

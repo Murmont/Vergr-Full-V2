@@ -1,9 +1,25 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { doc, updateDoc } from 'firebase/firestore';
+import { auth, db } from '../../firebase/config';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import VergrLogo from '../../components/VergrLogo';
 import Icon from '../../components/Icon';
+
+// Read a pending referrer id from (in order): the current URL's ?ref= param,
+// localStorage (set when the user first landed on any page via an invite),
+// or null. The invite link is `https://vergr-44494.web.app/?ref=<uid>` — the
+// AppRouter root handler stashes the value into localStorage on mount so it
+// survives the multi-step signup flow.
+function getPendingReferrerId() {
+  try {
+    const urlRef = new URLSearchParams(window.location.search).get('ref')
+      || new URLSearchParams(window.location.hash.split('?')[1] || '').get('ref');
+    if (urlRef) return urlRef;
+    return localStorage.getItem('vergr_ref') || null;
+  } catch { return null; }
+}
 
 export default function SignUpStep2() {
   const [username, setUsername] = useState('');
@@ -23,6 +39,29 @@ export default function SignUpStep2() {
     try {
       if (!email) { navigate('/login'); return; }
       else { await signUp(email, password, displayName); }
+
+      // Persist referral attribution if one is pending. We write it after
+      // `signUp()` so we know the auth user + their Firestore user doc both
+      // exist. `referredBy` is later read by `claimQuestReward('refer_friend')`
+      // to validate the invitee genuinely came from the referrer's link.
+      try {
+        const referrerId = getPendingReferrerId();
+        if (referrerId && auth.currentUser && referrerId !== auth.currentUser.uid) {
+          await updateDoc(doc(db, 'users', auth.currentUser.uid), {
+            referredBy: referrerId,
+            referredAt: new Date(),
+            username: username,
+          });
+        } else if (auth.currentUser) {
+          // Username is collected here but the cloud function's user-doc
+          // creation leaves it null — patch it in either way.
+          await updateDoc(doc(db, 'users', auth.currentUser.uid), { username });
+        }
+        localStorage.removeItem('vergr_ref');
+      } catch (e) {
+        console.warn('Post-signup user-doc patch failed:', e);
+      }
+
       navigate('/onboarding/welcome', { replace: true });
     } catch (err) {
       showToast(err.message || 'Sign up failed', 'error');

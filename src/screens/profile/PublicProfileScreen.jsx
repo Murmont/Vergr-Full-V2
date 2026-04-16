@@ -121,10 +121,12 @@ export default function PublicProfileScreen() {
     </>
   );
 
+  const isBot = user.accountType === 'news_bot';
+
   const actionButtons = !isMe && (
     <div className="flex gap-2">
-      <button onClick={handleMessage} className="w-10 h-10 rounded-full bg-surface-2 border border-white/[0.06] flex items-center justify-center hover:bg-surface-3 transition-colors"><Icon name="chat_bubble" size={18} /></button>
-      <button onClick={() => navigate('/wallet')} className="w-10 h-10 rounded-full bg-brand-gold/10 border border-brand-gold/20 flex items-center justify-center hover:bg-brand-gold/20 transition-colors"><Icon name="paid" size={18} className="text-brand-gold" /></button>
+      {!isBot && <button onClick={handleMessage} className="w-10 h-10 rounded-full bg-surface-2 border border-white/[0.06] flex items-center justify-center hover:bg-surface-3 transition-colors"><Icon name="chat_bubble" size={18} /></button>}
+      {!isBot && <button onClick={() => navigate('/wallet')} className="w-10 h-10 rounded-full bg-brand-gold/10 border border-brand-gold/20 flex items-center justify-center hover:bg-brand-gold/20 transition-colors"><Icon name="paid" size={18} className="text-brand-gold" /></button>}
       <motion.button
         onClick={handleFollowToggle}
         disabled={toggling}
@@ -148,7 +150,9 @@ export default function PublicProfileScreen() {
           <div className="flex gap-8 items-start -mt-10">
             <div className="relative shrink-0">
               <div className="border-4 border-bg-dark rounded-full"><UserAvatar src={user.avatar} size={100} /></div>
-              <div className="absolute -bottom-1 -right-1 px-2.5 py-1 rounded-lg border-2 border-bg-dark" style={{ background: vpLevel.ringColor || '#7B6FFF' }}><span className="text-xs font-black text-white">{vpLevel.name}</span></div>
+              {!isBot && (
+                <div className="absolute -top-2 left-1/2 -translate-x-1/2 px-2.5 py-1 rounded-lg border-2 border-bg-dark z-10 whitespace-nowrap" style={{ background: vpLevel.ringColor || '#7B6FFF' }}><span className="text-xs font-black text-white">{vpLevel.name}</span></div>
+              )}
             </div>
             <div className="flex-1 min-w-0 pt-12">
               <div className="flex items-center justify-between mb-2">
@@ -161,17 +165,19 @@ export default function PublicProfileScreen() {
               <p className="text-brand-cyan text-sm font-dmmono mb-2">@{user.username}</p>
               {user.bio && <p className="text-text-secondary text-sm leading-relaxed mb-4 max-w-lg">{user.bio}</p>}
               <div className="flex items-center gap-6 mb-4">
-                <span><span className="text-lg font-bold font-dmmono">{formatCount(user.followerCount)}</span> <span className="text-text-muted text-xs">Fans</span></span>
+                <span><span className="text-lg font-bold font-dmmono">{formatCount(user.followerCount)}</span> <span className="text-text-muted text-xs">Followers</span></span>
                 <span><span className="text-lg font-bold font-dmmono">{formatCount(user.followingCount)}</span> <span className="text-text-muted text-xs">Following</span></span>
                 <span><span className="text-lg font-bold font-dmmono">{formatCount(user.postCount)}</span> <span className="text-text-muted text-xs">Posts</span></span>
               </div>
-              <div className="p-3 bg-surface-2/50 rounded-2xl border border-white/[0.04] max-w-md">
-                <div className="flex justify-between items-center mb-1.5">
-                  <VPLevelBadge vp={userVP} size="sm" />
-                  {vpNext ? <span className="text-[10px] text-brand-violet font-dmmono">{userVP.toLocaleString()} / {vpNext.vpRequired.toLocaleString()} VP</span> : <span className="text-[10px] text-brand-violet font-dmmono">MAX</span>}
+              {!isBot && (
+                <div className="p-3 bg-surface-2/50 rounded-2xl border border-white/[0.04] max-w-md">
+                  <div className="flex justify-between items-center mb-1.5">
+                    <VPLevelBadge vp={userVP} size="sm" />
+                    {vpNext ? <span className="text-[10px] text-brand-violet font-dmmono">{userVP.toLocaleString()} / {vpNext.vpRequired.toLocaleString()} VP</span> : <span className="text-[10px] text-brand-violet font-dmmono">MAX</span>}
+                  </div>
+                  <div className="h-1.5 w-full bg-bg-dark rounded-full overflow-hidden border border-white/[0.04]"><div className="h-full rounded-full transition-all" style={{ width: `${vpProgress}%`, background: vpLevel.ringColor || '#7B6FFF' }} /></div>
                 </div>
-                <div className="h-1.5 w-full bg-bg-dark rounded-full overflow-hidden border border-white/[0.04]"><div className="h-full rounded-full transition-all" style={{ width: `${vpProgress}%`, background: vpLevel.ringColor || '#7B6FFF' }} /></div>
-              </div>
+              )}
             </div>
           </div>
           <div className="flex border-b border-white/[0.04] mt-6 mb-4">
@@ -197,12 +203,14 @@ export default function PublicProfileScreen() {
       <div className="px-4 -mt-10 flex items-end justify-between mb-3">
         <div className="relative">
           <div className="border-4 border-bg-dark rounded-full"><UserAvatar src={user.avatar} size={72} /></div>
-          <div className="absolute -bottom-1 -right-1 px-2 py-0.5 rounded-lg border-2 border-bg-dark" style={{ background: vpLevel.ringColor || '#7B6FFF' }}><span className="text-[10px] font-black text-white">{vpLevel.name}</span></div>
+          {!isBot && (
+            <div className="absolute -top-2 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-lg border-2 border-bg-dark z-10 whitespace-nowrap" style={{ background: vpLevel.ringColor || '#7B6FFF' }}><span className="text-[10px] font-black text-white">{vpLevel.name}</span></div>
+          )}
         </div>
         {!isMe && (
           <div className="flex gap-2 pb-1">
-            <button onClick={handleMessage} className="w-10 h-10 rounded-full bg-surface-2 border border-white/[0.06] flex items-center justify-center"><Icon name="chat_bubble" size={18} /></button>
-            <button onClick={() => navigate('/wallet')} className="w-10 h-10 rounded-full bg-brand-gold/10 border border-brand-gold/20 flex items-center justify-center"><Icon name="paid" size={18} className="text-brand-gold" /></button>
+            {!isBot && <button onClick={handleMessage} className="w-10 h-10 rounded-full bg-surface-2 border border-white/[0.06] flex items-center justify-center"><Icon name="chat_bubble" size={18} /></button>}
+            {!isBot && <button onClick={() => navigate('/wallet')} className="w-10 h-10 rounded-full bg-brand-gold/10 border border-brand-gold/20 flex items-center justify-center"><Icon name="paid" size={18} className="text-brand-gold" /></button>}
             <motion.button onClick={handleFollowToggle} disabled={toggling}
               whileTap={{ scale: 0.92 }}
               transition={{ type: 'spring', stiffness: 500, damping: 25 }}
@@ -217,16 +225,18 @@ export default function PublicProfileScreen() {
         <p className="text-brand-cyan text-sm font-dmmono mb-2">@{user.username}</p>
         {user.bio && <p className="text-text-secondary text-sm leading-relaxed mb-4">{user.bio}</p>}
         <div className="flex items-center gap-0 mb-4 border border-white/[0.06] rounded-2xl overflow-hidden bg-surface-1">
-          <div className="flex-1 py-3 text-center"><p className="text-base font-bold font-dmmono">{formatCount(user.followerCount)}</p><p className="text-[9px] text-text-muted uppercase font-semibold tracking-wider mt-0.5">Fans</p></div>
+          <div className="flex-1 py-3 text-center"><p className="text-base font-bold font-dmmono">{formatCount(user.followerCount)}</p><p className="text-[9px] text-text-muted uppercase font-semibold tracking-wider mt-0.5">Followers</p></div>
           <div className="w-px h-8 bg-border-accent" />
           <div className="flex-1 py-3 text-center"><p className="text-base font-bold font-dmmono">{formatCount(user.followingCount)}</p><p className="text-[9px] text-text-muted uppercase font-semibold tracking-wider mt-0.5">Following</p></div>
           <div className="w-px h-8 bg-border-accent" />
           <div className="flex-1 py-3 text-center"><p className="text-base font-bold font-dmmono">{formatCount(user.postCount)}</p><p className="text-[9px] text-text-muted uppercase font-semibold tracking-wider mt-0.5">Posts</p></div>
         </div>
-        <div className="p-3 bg-surface-2/50 rounded-2xl border border-white/[0.04] mb-2">
-          <div className="flex justify-between items-center mb-1.5"><VPLevelBadge vp={userVP} size="sm" />{vpNext ? <span className="text-[10px] text-brand-violet font-dmmono">{userVP.toLocaleString()} / {vpNext.vpRequired.toLocaleString()}</span> : <span className="text-[10px] text-brand-violet font-dmmono">MAX</span>}</div>
-          <div className="h-1.5 w-full bg-bg-dark rounded-full overflow-hidden border border-white/[0.04]"><div className="h-full rounded-full transition-all" style={{ width: `${vpProgress}%`, background: vpLevel.ringColor || '#7B6FFF' }} /></div>
-        </div>
+        {!isBot && (
+          <div className="p-3 bg-surface-2/50 rounded-2xl border border-white/[0.04] mb-2">
+            <div className="flex justify-between items-center mb-1.5"><VPLevelBadge vp={userVP} size="sm" />{vpNext ? <span className="text-[10px] text-brand-violet font-dmmono">{userVP.toLocaleString()} / {vpNext.vpRequired.toLocaleString()}</span> : <span className="text-[10px] text-brand-violet font-dmmono">MAX</span>}</div>
+            <div className="h-1.5 w-full bg-bg-dark rounded-full overflow-hidden border border-white/[0.04]"><div className="h-full rounded-full transition-all" style={{ width: `${vpProgress}%`, background: vpLevel.ringColor || '#7B6FFF' }} /></div>
+          </div>
+        )}
       </div>
       <div className="flex border-b border-white/[0.04] mt-4 px-2">
         {['Posts', 'Media', 'Likes'].map(tab => (

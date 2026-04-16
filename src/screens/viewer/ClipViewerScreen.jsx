@@ -3,13 +3,17 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { collection, query, where, orderBy, limit, getDocs } from 'firebase/firestore';
 import { db } from '../../firebase/config';
-import { getUser, toggleLike } from '../../firebase/firestore';
+import { getUser, toggleLike, incrementShareCount, getComments } from '../../firebase/firestore';
 import UserAvatar from '../../components/UserAvatar';
 import Icon from '../../components/Icon';
+import { getEmbedUrl } from '../../components/EmbedVideoPlayer';
+import { triggerInterstitial } from '../../utils/interstitialAd';
+import { timeAgo } from '../../utils/helpers';
 
 /**
  * Full-screen vertical video viewer.
  * Opens when tapping a clip/video post.
+ * Supports both uploaded videos and embedded YouTube/Twitch videos.
  * Swipe up for next, swipe down for previous. Video loops.
  * Engagement bar on right side (TikTok-style).
  */
@@ -18,10 +22,18 @@ export default function ClipViewerScreen() {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
 
+  // Fire PropellerAds interstitial when the user enters fullscreen video mode.
+  // This is the highest-intent video moment in the app, and the cooldown
+  // inside triggerInterstitial() ensures we don't fire it again on every
+  // swipe to the next clip.
+  useEffect(() => { triggerInterstitial(); }, []);
+
   const [clips, setClips] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [showComments, setShowComments] = useState(false);
+  const [comments, setComments] = useState([]);
+  const [commentsLoading, setCommentsLoading] = useState(false);
   const containerRef = useRef(null);
   const touchStartY = useRef(0);
   const isScrolling = useRef(false);
@@ -31,7 +43,6 @@ export default function ClipViewerScreen() {
     const loadClips = async () => {
       setLoading(true);
       try {
-        // Get clip-type posts
         const q = query(
           collection(db, 'posts'),
           where('status', '==', 'published'),
@@ -46,9 +57,15 @@ export default function ClipViewerScreen() {
         for (const d of snap.docs) {
           const post = { id: d.id, ...d.data() };
           post.author = await getUser(post.authorId);
-          // Get the video URL
+          // Get the video URL — support both uploaded and embedded videos
           post.videoUrl = post.mediaUrls?.[0] || post.mediaUrl || null;
-          if (post.videoUrl) {
+          post.isEmbed = !!(post.embedVideoUrl || post.youtubeVideoId);
+          if (post.isEmbed) {
+            post.embedParsed = post.youtubeVideoId
+              ? { platform: 'youtube', videoId: post.youtubeVideoId }
+              : null;
+          }
+          if (post.videoUrl || post.isEmbed) {
             if (post.id === postId) targetIdx = all.length;
             all.push(post);
           }
@@ -70,6 +87,7 @@ export default function ClipViewerScreen() {
     if (currentIndex < clips.length - 1) {
       setCurrentIndex(prev => prev + 1);
       setShowComments(false);
+      setComments([]);
     }
   }, [currentIndex, clips.length]);
 
@@ -77,19 +95,54 @@ export default function ClipViewerScreen() {
     if (currentIndex > 0) {
       setCurrentIndex(prev => prev - 1);
       setShowComments(false);
+      setComments([]);
     }
   }, [currentIndex]);
 
+  // Load comments when drawer opens
+  useEffect(() => {
+    if (!showComments || !currentClip?.id) return;
+    setCommentsLoading(true);
+    getComments(currentClip.id, 50)
+      .then(setComments)
+      .catch(() => setComments([]))
+      .finally(() => setCommentsLoading(false));
+  }, [showComments, currentClip?.id]);
+
+  const handleShare = async () => {
+    if (!currentClip) return;
+    // Use /share/clip/:id (server-rendered OG tags) so messengers show
+    // a proper preview card with thumbnail + title instead of a turquoise box.
+    const url = `${window.location.origin}/share/clip/${currentClip.id}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: currentClip.content?.slice(0, 50) || 'Check out this clip on VERGR',
+          url,
+        });
+        incrementShareCount(currentClip.id).catch(() => {});
+      } catch {}
+    } else {
+      try {
+        await navigator.clipboard.writeText(url);
+        incrementShareCount(currentClip.id).catch(() => {});
+      } catch {}
+    }
+  };
+
   // Touch/swipe handling
+  const touchStartX = useRef(0);
   const handleTouchStart = (e) => {
     touchStartY.current = e.touches[0].clientY;
+    touchStartX.current = e.touches[0].clientX;
     isScrolling.current = false;
   };
 
   const handleTouchEnd = (e) => {
     if (isScrolling.current) return;
     const deltaY = touchStartY.current - e.changedTouches[0].clientY;
-    if (Math.abs(deltaY) > 60) {
+    const deltaX = touchStartX.current - e.changedTouches[0].clientX;
+    if (Math.abs(deltaY) > 60 && Math.abs(deltaY) > Math.abs(deltaX)) {
       if (deltaY > 0) goNext();
       else goPrev();
     }
@@ -155,8 +208,36 @@ export default function ClipViewerScreen() {
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
-      {/* Video */}
-      <VideoPlayer key={currentClip.id} src={currentClip.videoUrl} poster={currentClip.thumbnailUrl} />
+      {/* Video — uploaded or embedded */}
+      {currentClip.isEmbed ? (
+        <EmbedVideoFullscreen
+          key={currentClip.id}
+          youtubeVideoId={currentClip.youtubeVideoId}
+          embedVideoUrl={currentClip.embedVideoUrl}
+        />
+      ) : (
+        <VideoPlayer key={currentClip.id} src={currentClip.videoUrl} poster={currentClip.thumbnailUrl} />
+      )}
+
+      {/* Gesture catcher: thin strips on left + right edges that capture
+          vertical swipes the iframe would otherwise eat. The center column
+          stays clickable so users can hit YouTube's native controls. */}
+      {currentClip.isEmbed && (
+        <>
+          <div
+            className="absolute top-16 bottom-32 left-0 w-16 z-[5]"
+            style={{ touchAction: 'pan-y' }}
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+          />
+          <div
+            className="absolute top-16 bottom-32 right-16 w-16 z-[5]"
+            style={{ touchAction: 'pan-y' }}
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+          />
+        </>
+      )}
 
       {/* Top bar — back + clip counter */}
       <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-4 pt-4 pb-8 bg-gradient-to-b from-black/60 to-transparent safe-top">
@@ -184,7 +265,7 @@ export default function ClipViewerScreen() {
           onTap={() => setShowComments(!showComments)}
         />
         <EngagementButton icon="bookmark" count={currentClip.saveCount} />
-        <EngagementButton icon="share" count={currentClip.shareCount} />
+        <EngagementButton icon="share" count={currentClip.shareCount} onTap={handleShare} />
       </div>
 
       {/* Bottom info — author, caption */}
@@ -219,13 +300,56 @@ export default function ClipViewerScreen() {
 
       {/* Comments drawer */}
       {showComments && (
-        <div className="absolute inset-x-0 bottom-0 z-20 h-[60vh] bg-surface-1 rounded-t-3xl border-t border-white/[0.04] shadow-2xl animate-slide-up">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.03]">
-            <h3 className="font-syne font-bold text-sm">Comments ({currentClip.commentCount || 0})</h3>
+        <div className="absolute inset-x-0 bottom-0 z-20 h-[60vh] bg-surface-1 rounded-t-3xl border-t border-white/[0.04] shadow-2xl animate-slide-up flex flex-col">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.03] shrink-0">
+            <h3 className="font-syne font-bold text-sm">Comments ({currentClip.commentCount || comments.length || 0})</h3>
             <button onClick={() => setShowComments(false)} className="text-text-muted"><Icon name="close" size={20} /></button>
           </div>
           <div className="flex-1 overflow-y-auto p-4">
-            <p className="text-text-muted text-sm text-center py-8">Comments loading...</p>
+            {commentsLoading ? (
+              <div className="flex justify-center py-8">
+                <div className="w-5 h-5 border-2 border-surface-3 border-t-brand-cyan rounded-full animate-spin" />
+              </div>
+            ) : comments.length === 0 ? (
+              <div className="text-center py-10">
+                <Icon name="chat_bubble_outline" size={36} className="text-text-muted/30 mx-auto mb-2" />
+                <p className="text-text-muted text-sm">No comments yet</p>
+                <button
+                  onClick={() => { setShowComments(false); navigate(`/post/${currentClip.id}`); }}
+                  className="mt-3 text-brand-cyan text-xs font-semibold hover:underline"
+                >
+                  Be the first to comment
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {comments.map(c => (
+                  <div key={c.id} className="flex gap-2.5">
+                    <UserAvatar src={c.author?.avatar} size={30} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 mb-0.5">
+                        <span className="text-text-primary text-xs font-semibold truncate">{c.author?.displayName || 'User'}</span>
+                        <span className="text-text-muted text-[10px] font-dmmono">· {timeAgo(c.createdAt?.toDate ? c.createdAt.toDate() : c.createdAt)}</span>
+                      </div>
+                      {c.content && <p className="text-text-secondary text-xs leading-relaxed break-words">{c.content}</p>}
+                      {c.mediaUrl && (
+                        <div className="mt-1.5 rounded-lg overflow-hidden border border-white/[0.06] max-w-[200px]">
+                          {c.mediaType === 'video' || c.mediaType === 'clip'
+                            ? <video src={c.mediaUrl} controls muted className="w-full h-auto max-h-[180px] bg-black" />
+                            : <img src={c.mediaUrl} alt="" className="w-full h-auto max-h-[180px] object-cover" />}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                <button
+                  onClick={() => { setShowComments(false); navigate(`/post/${currentClip.id}`); }}
+                  className="w-full text-center text-brand-cyan text-xs font-semibold py-2 hover:underline"
+                >
+                  Add a comment →
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -275,6 +399,65 @@ function VideoPlayer({ src, poster }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Embedded video fullscreen (YouTube/Twitch) ───
+function EmbedVideoFullscreen({ youtubeVideoId, embedVideoUrl }) {
+  const iframeRef = useRef(null);
+  const [iframeLoaded, setIframeLoaded] = useState(false);
+
+  let embedSrc;
+  let posterUrl = null;
+  if (youtubeVideoId) {
+    embedSrc = `https://www.youtube-nocookie.com/embed/${youtubeVideoId}?autoplay=1&controls=1&modestbranding=1&rel=0&playsinline=1&mute=0`;
+    posterUrl = `https://img.youtube.com/vi/${youtubeVideoId}/hqdefault.jpg`;
+  } else if (embedVideoUrl) {
+    const parsed = (() => {
+      const match = embedVideoUrl.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+      if (match) return { platform: 'youtube', videoId: match[1] };
+      const twitchClip = embedVideoUrl.match(/clips\.twitch\.tv\/([a-zA-Z0-9_-]+)/);
+      if (twitchClip) return { platform: 'twitch-clip', videoId: twitchClip[1] };
+      const twitchVod = embedVideoUrl.match(/twitch\.tv\/videos\/(\d+)/);
+      if (twitchVod) return { platform: 'twitch-vod', videoId: twitchVod[1] };
+      return null;
+    })();
+    if (parsed?.platform === 'youtube') {
+      posterUrl = `https://img.youtube.com/vi/${parsed.videoId}/hqdefault.jpg`;
+    }
+    embedSrc = parsed ? getEmbedUrl(parsed, true)?.replace('mute=1', 'mute=0')?.replace('muted=true', 'muted=false') : null;
+  }
+
+  if (!embedSrc) return null;
+
+  return (
+    <div className="absolute inset-0 flex items-center justify-center bg-black">
+      {/* Poster behind the iframe so the screen isn't blank while YouTube boots */}
+      {posterUrl && (
+        <img
+          src={posterUrl}
+          alt=""
+          className={`absolute inset-0 w-full h-full object-contain transition-opacity duration-300 ${iframeLoaded ? 'opacity-0' : 'opacity-100'}`}
+        />
+      )}
+      {!iframeLoaded && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center">
+            <div className="w-6 h-6 border-2 border-brand-cyan border-t-transparent rounded-full animate-spin" />
+          </div>
+        </div>
+      )}
+      <iframe
+        ref={iframeRef}
+        src={embedSrc}
+        onLoad={() => setIframeLoaded(true)}
+        className="w-full h-full relative z-[1]"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+        allowFullScreen
+        frameBorder="0"
+        title="Video"
+      />
     </div>
   );
 }

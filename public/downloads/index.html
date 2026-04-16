@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>VERGR — Beta Download</title>
+    <meta name="description" content="VERGR desktop beta — private download for invited reviewers." />
+    <link rel="icon" href="/icons/icon-192.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@500&display=swap" rel="stylesheet" />
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { height: 100%; }
+      body {
+        background: #07080D;
+        color: #ECEFFE;
+        font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 48px 20px 80px;
+        min-height: 100vh;
+      }
+      .bg {
+        position: fixed; inset: 0; z-index: -1; pointer-events: none;
+        background:
+          radial-gradient(circle at 20% 10%, rgba(77, 255, 212, 0.08) 0%, transparent 50%),
+          radial-gradient(circle at 80% 90%, rgba(123, 111, 255, 0.08) 0%, transparent 50%),
+          #07080D;
+      }
+      .brand {
+        font-family: 'Syne', sans-serif;
+        font-weight: 800;
+        font-size: 36px;
+        letter-spacing: -0.02em;
+        background: linear-gradient(135deg, #4DFFD4 0%, #7B6FFF 50%, #C87FFF 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        margin-bottom: 8px;
+      }
+      .tagline {
+        color: #7B82A8;
+        font-size: 14px;
+        margin-bottom: 48px;
+      }
+      .card {
+        max-width: 640px;
+        width: 100%;
+        background: rgba(15, 17, 24, 0.85);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 20px;
+        padding: 32px;
+        backdrop-filter: blur(12px);
+        box-shadow: 0 0 60px rgba(77, 255, 212, 0.04);
+      }
+      .card + .card { margin-top: 20px; }
+      h2 {
+        font-family: 'Syne', sans-serif;
+        font-weight: 700;
+        font-size: 20px;
+        color: #ECEFFE;
+        margin-bottom: 16px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      h2 .num {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        border-radius: 8px;
+        background: rgba(77, 255, 212, 0.12);
+        color: #4DFFD4;
+        font-family: 'DM Mono', monospace;
+        font-size: 13px;
+        font-weight: 600;
+      }
+      p, li {
+        color: #AEB4D4;
+        font-size: 14px;
+        line-height: 1.6;
+      }
+      ul { padding-left: 20px; margin-top: 8px; }
+      li { margin-bottom: 4px; }
+      strong { color: #ECEFFE; font-weight: 600; }
+      kbd {
+        display: inline-block;
+        padding: 2px 7px;
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 6px;
+        font-family: 'DM Mono', monospace;
+        font-size: 12px;
+        color: #ECEFFE;
+      }
+      .download-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        width: 100%;
+        padding: 18px 24px;
+        margin-top: 20px;
+        border: none;
+        border-radius: 14px;
+        background: linear-gradient(135deg, #4DFFD4 0%, #7B6FFF 100%);
+        color: #07080D;
+        font-family: 'Syne', sans-serif;
+        font-weight: 800;
+        font-size: 16px;
+        text-decoration: none;
+        cursor: pointer;
+        transition: transform 0.15s, box-shadow 0.15s;
+      }
+      .download-btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 12px 32px rgba(77, 255, 212, 0.25);
+      }
+      .download-btn:active { transform: translateY(0); }
+      .download-btn svg { width: 20px; height: 20px; }
+      .meta {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 14px;
+        padding-top: 14px;
+        border-top: 1px solid rgba(255, 255, 255, 0.05);
+        font-family: 'DM Mono', monospace;
+        font-size: 12px;
+        color: #7B82A8;
+      }
+      .warn {
+        background: rgba(255, 193, 7, 0.06);
+        border: 1px solid rgba(255, 193, 7, 0.2);
+        border-radius: 12px;
+        padding: 14px 16px;
+        margin-top: 16px;
+      }
+      .warn p { color: #E6CF7A; font-size: 13px; }
+      .warn strong { color: #FFD86F; }
+      footer {
+        margin-top: 48px;
+        color: #555B7A;
+        font-size: 12px;
+        text-align: center;
+      }
+      footer a { color: #7B82A8; text-decoration: none; }
+      footer a:hover { color: #ECEFFE; }
+      @media (max-width: 560px) {
+        body { padding: 32px 16px 60px; }
+        .brand { font-size: 28px; }
+        .card { padding: 22px; }
+        h2 { font-size: 17px; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="bg"></div>
+
+    <h1 class="brand">VERGR</h1>
+    <p class="tagline">Desktop Beta · Private Reviewer Access</p>
+
+    <!-- Download card -->
+    <div class="card">
+      <h2><span class="num">↓</span> Windows Installer</h2>
+      <p>
+        VERGR Desktop for Windows 10 / 11 (x64). This is a sealed beta build
+        for invited reviewers. Please do not redistribute the installer.
+      </p>
+      <a class="download-btn" href="./VERGR-Setup.exe" download>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/>
+          <line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+        Download VERGR for Windows
+      </a>
+      <div class="meta">
+        <span>VERGR-Setup.exe</span>
+        <span id="build-version">v1.0.0-beta</span>
+      </div>
+      <div class="warn">
+        <p>
+          <strong>Windows SmartScreen notice:</strong> this beta build is not
+          yet code-signed with a paid certificate. Windows may show
+          <em>"Windows protected your PC"</em> the first time you run the
+          installer. Click <strong>More info</strong> →
+          <strong>Run anyway</strong>. This is expected for sealed betas and
+          will go away once the production cert is in place.
+        </p>
+      </div>
+    </div>
+
+    <!-- How to install -->
+    <div class="card">
+      <h2><span class="num">1</span> Install</h2>
+      <ol style="padding-left: 20px; color: #AEB4D4; font-size: 14px; line-height: 1.8;">
+        <li>Double-click <kbd>VERGR-Setup.exe</kbd>.</li>
+        <li>If SmartScreen appears, click <strong>More info</strong> → <strong>Run anyway</strong>.</li>
+        <li>Accept the install path (defaults to <kbd>%LOCALAPPDATA%\VERGR</kbd>).</li>
+        <li>Launch <strong>VERGR</strong> from the Start menu.</li>
+      </ol>
+    </div>
+
+    <!-- Sign in -->
+    <div class="card">
+      <h2><span class="num">2</span> Sign in</h2>
+      <p>
+        Create a new account or sign in with Google. Google sign-in opens
+        your default browser briefly to handle the OAuth redirect — this is
+        normal and returns control to the app automatically.
+      </p>
+      <p style="margin-top: 10px;">
+        <strong>Note for reviewers:</strong> coin purchases are intentionally
+        disabled in this beta — payment processing is connected after the
+        production domain + business email are live. All other features
+        (posts, squads, chat, tournaments, quests, Watch-to-Earn) are fully
+        functional.
+      </p>
+    </div>
+
+    <!-- Where data lives -->
+    <div class="card">
+      <h2><span class="num">3</span> Data &amp; storage</h2>
+      <ul>
+        <li><strong>App binary:</strong> <kbd>%LOCALAPPDATA%\VERGR</kbd></li>
+        <li><strong>WebView cache &amp; auth tokens:</strong> <kbd>%APPDATA%\com.vergr.desktop</kbd></li>
+        <li><strong>Your posts, chats, wallet:</strong> Firebase (cloud). Nothing game-critical is stored locally.</li>
+      </ul>
+      <p style="margin-top: 10px;">
+        Uninstall via <strong>Settings → Apps → VERGR → Uninstall</strong>.
+        To wipe local cache too, also delete the <kbd>%APPDATA%\com.vergr.desktop</kbd>
+        folder manually.
+      </p>
+    </div>
+
+    <!-- Reviewer checklist -->
+    <div class="card">
+      <h2><span class="num">4</span> What to test</h2>
+      <ul>
+        <li>Sign up / Google sign-in / sign out</li>
+        <li>Create a post (text, photo, clip)</li>
+        <li>Explore feed, like/comment/share</li>
+        <li>Earn screen → Watch to Earn → VP credit flow</li>
+        <li>Create or join a squad, send chat messages</li>
+        <li>Browse tournaments &amp; services</li>
+        <li>Notifications (allow when prompted)</li>
+      </ul>
+      <p style="margin-top: 12px;">
+        Report issues to the email address in your reviewer invite. Thanks
+        for helping shape VERGR.
+      </p>
+    </div>
+
+    <footer>
+      © 2026 VERGR · Private beta, do not redistribute ·
+      <a href="/">Back to web app</a>
+    </footer>
+
+    <script>
+      // Best-effort: show the installer's build timestamp if we can fetch it.
+      // Silently ignored if the file isn't there yet (pre-build visit).
+      (function () {
+        fetch('./VERGR-Setup.exe', { method: 'HEAD' })
+          .then(function (r) {
+            if (!r.ok) return;
+            var lm = r.headers.get('last-modified');
+            if (!lm) return;
+            var d = new Date(lm);
+            if (isNaN(d)) return;
+            var pad = function (n) { return n < 10 ? '0' + n : n; };
+            var txt =
+              'v1.0.0-beta · ' +
+              d.getFullYear() +
+              '-' +
+              pad(d.getMonth() + 1) +
+              '-' +
+              pad(d.getDate());
+            var el = document.getElementById('build-version');
+            if (el) el.textContent = txt;
+          })
+          .catch(function () {});
+      })();
+    </script>
+  </body>
+</html>

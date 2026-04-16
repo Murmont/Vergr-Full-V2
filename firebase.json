@@ -8,8 +8,20 @@
     ],
     "rewrites": [
       {
+        "source": "/share/post/**",
+        "function": { "functionId": "shareLink", "region": "europe-west1" }
+      },
+      {
+        "source": "/share/clip/**",
+        "function": { "functionId": "shareLink", "region": "europe-west1" }
+      },
+      {
         "source": "/app/**",
         "destination": "/app/index.html"
+      },
+      {
+        "source": "/media/**",
+        "function": { "functionId": "serveMedia", "region": "europe-west1" }
       }
     ],
     "headers": [
@@ -28,6 +40,19 @@
           {
             "key": "Cache-Control",
             "value": "public, max-age=31536000, immutable"
+          }
+        ]
+      },
+      {
+        "source": "/media/**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=604800, s-maxage=2592000"
+          },
+          {
+            "key": "Access-Control-Allow-Origin",
+            "value": "*"
           }
         ]
       }

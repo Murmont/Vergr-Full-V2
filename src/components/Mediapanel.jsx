@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import Icon from './Icon';
-import { searchGifs, getTrendingGifs, searchStickers, getTrendingStickers, searchClips, getTrendingClips } from '../utils/klipyApi';
+import { searchGifs, getTrendingGifs, searchStickers, getTrendingStickers, searchClips, getTrendingClips, trackKlipyImpression } from '../utils/klipyApi';
 
 const TABS = [
   { id: 'gifs', label: 'GIFs', icon: 'gif_box', provider: 'tenor' },
@@ -73,6 +73,11 @@ export default function MediaPanel({ defaultTab = 'gifs', onSelect, onClose }) {
             {results.map(item => (
               <button key={item.id}
                 onClick={() => {
+                  if (item.isAd) {
+                    // KLIPY ads: open the advertiser URL in a new tab, don't insert into chat
+                    if (item.click_url) window.open(item.click_url, '_blank', 'noopener,noreferrer');
+                    return;
+                  }
                   // For clips, send the mp4 video URL for chat playback
                   const sendUrl = isClip ? (item.videoUrl || item.url) : item.url;
                   onSelect?.(tab, sendUrl, item);
@@ -83,13 +88,19 @@ export default function MediaPanel({ defaultTab = 'gifs', onSelect, onClose }) {
                 {/* Always show gif/webp preview thumbnail — never raw video in grid */}
                 <img src={item.preview || item.url} alt={item.title || ''}
                   className={isSticker ? 'w-full h-full object-contain' : 'w-full h-full object-cover'}
-                  loading="lazy" />
-                {isClip && (
+                  loading="lazy"
+                  onLoad={() => { if (item.isAd) trackKlipyImpression(item); }} />
+                {isClip && !item.isAd && (
                   <div className="absolute inset-0 flex items-center justify-center bg-black/20">
                     <div className="w-8 h-8 rounded-full bg-black/60 flex items-center justify-center">
                       <Icon name="play_arrow" size={18} className="text-white" />
                     </div>
                   </div>
+                )}
+                {item.isAd && (
+                  <span className="absolute top-1 left-1 px-1.5 py-0.5 rounded bg-black/70 text-[8px] font-bold text-white uppercase tracking-wider">
+                    Ad
+                  </span>
                 )}
               </button>
             ))}

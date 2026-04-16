@@ -2,8 +2,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { collection, query, orderBy, where, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, setDoc, deleteDoc, getDocs, Timestamp, writeBatch } from 'firebase/firestore';
-import { db, auth } from '../../firebase/config';
+import { collection, query, orderBy, where, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, setDoc, deleteDoc, getDocs, Timestamp, writeBatch, increment } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
+import { db, auth, functions } from '../../firebase/config';
+import { enqueueMessage, isOfflineError, processQueue } from '../../utils/offlineQueue';
+import { dissolveElement, preloadThanosDissolve } from '../../utils/thanosDissolve';
+import { removeCachedMessage } from '../../utils/messageCache';
 import { startVoiceRecording, stopVoiceRecording, uploadMediaFile, uploadBlob, getYouTubeID } from '../../utils/mediaHelpers';
 import { getChatBgStyle } from '../../utils/chatBackgrounds';
 import Icon from '../../components/Icon';
@@ -72,6 +76,46 @@ const AudioPlayer = ({ url, isMe, label }) => {
         </div>
       </div>
       <audio ref={audioRef} src={url} preload="metadata" onTimeUpdate={onTimeUpdate} onLoadedMetadata={onLoadedMetadata} onEnded={() => { setIsPlaying(false); setProgress(0); }} />
+    </div>
+  );
+};
+
+/* ═══════ Clip Message Player (with sound toggle) ═══════ */
+const ClipMessagePlayer = ({ src, poster }) => {
+  const videoRef = useRef(null);
+  const [muted, setMuted] = useState(true);
+
+  const toggleMute = (e) => {
+    e.stopPropagation();
+    const v = videoRef.current;
+    if (!v) return;
+    const next = !muted;
+    v.muted = next;
+    setMuted(next);
+    if (!next) v.play().catch(() => {});
+  };
+
+  return (
+    <div className="relative">
+      <video
+        ref={videoRef}
+        src={src}
+        poster={poster}
+        controls
+        loop
+        muted
+        autoPlay
+        preload="metadata"
+        playsInline
+        className="w-full max-h-64 rounded-sm"
+      />
+      <button
+        onClick={toggleMute}
+        className="absolute top-2 left-2 w-8 h-8 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/80 transition"
+        aria-label={muted ? 'Unmute' : 'Mute'}
+      >
+        <Icon name={muted ? 'volume_off' : 'volume_up'} size={16} />
+      </button>
     </div>
   );
 };
@@ -184,7 +228,7 @@ export default function ChatThreadScreen() {
   const recordingInterval = useRef(null);
   const { isDesktop } = useResponsive();
   const { typingUsers, setTyping, clearTyping } = useTyping(chatId);
-  const { messages, rawMessages, loading } = useMessages(chatId);
+  const { messages, rawMessages, loading, removeLocalMessage } = useMessages(chatId);
   const { tier, tierConfig, checkFeature, checkFileSize } = useTier();
 
   const [chatInfo, setChatInfo] = useState(null);
@@ -197,6 +241,7 @@ export default function ChatThreadScreen() {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [contextMenuMsgId, setContextMenuMsgId] = useState(null);
+  const [contextMenuPos, setContextMenuPos] = useState({ x: 0, y: 0 });
   const [previewFile, setPreviewFile] = useState(null);
   const [optimisticMsgs, setOptimisticMsgs] = useState([]);
   const [replyTo, setReplyTo] = useState(null);
@@ -226,16 +271,97 @@ export default function ChatThreadScreen() {
     return () => unsub();
   }, [chatId]);
 
+  // Warm up html2canvas so the first delete animation doesn't stall on a
+  // 400KB dynamic import. Runs once when the chat screen mounts.
+  useEffect(() => { preloadThanosDissolve(); }, []);
+
+  // Mobile virtual-keyboard handling.
+  // On mobile when the textarea is focused, the browser tries to scroll
+  // the input into view at the document level. Because 100dvh doesn't
+  // instantly track keyboard show/hide on every WebView, the outer chat
+  // container ends up taller than the visible viewport and the page
+  // scrolls up — header disappears, blank space under the input. Fix:
+  // pin the container to visualViewport.height and keep the window pinned
+  // at scroll-0 so nothing can push off-screen.
+  useEffect(() => {
+    if (isDesktop) return;
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const apply = () => {
+      document.documentElement.style.setProperty('--chat-vh', `${vv.height}px`);
+      // Kill any scroll the browser tried to apply at window level
+      if (window.scrollY !== 0) window.scrollTo(0, 0);
+    };
+    apply();
+    vv.addEventListener('resize', apply);
+    vv.addEventListener('scroll', apply);
+    window.addEventListener('scroll', apply);
+    return () => {
+      vv.removeEventListener('resize', apply);
+      vv.removeEventListener('scroll', apply);
+      window.removeEventListener('scroll', apply);
+      document.documentElement.style.removeProperty('--chat-vh');
+    };
+  }, [isDesktop]);
+
+  // Track whether we've done the initial jump-to-bottom for this chat.
+  // First open should snap instantly to the latest message; subsequent
+  // updates only smooth-scroll if the user is already near the bottom.
+  const initialScrollDoneRef = useRef(false);
+
+  // Reset the "initial scroll" flag whenever the user opens a different chat.
+  useEffect(() => {
+    initialScrollDoneRef.current = false;
+  }, [chatId]);
+
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
+    if (loading) return;
+    if (messages.length === 0) return;
 
-    const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
+    if (!initialScrollDoneRef.current) {
+      // Snap instantly to the bottom on first paint after messages arrive.
+      // Media inside messages (images, videos, GIFs, clips) loads async and
+      // expands layout AFTER our initial jump, so we keep re-pinning the
+      // scroll for ~1.5s OR until the user scrolls themselves. Also listen
+      // to `load` events bubbling up from <img>/<video> so the last jump
+      // always happens *after* the final media settles.
+      const jump = () => { container.scrollTop = container.scrollHeight; };
+      let userScrolled = false;
+      const onUserScroll = () => { userScrolled = true; };
+      container.addEventListener('wheel', onUserScroll, { passive: true, once: true });
+      container.addEventListener('touchmove', onUserScroll, { passive: true, once: true });
+
+      const pinIfSafe = () => { if (!userScrolled) jump(); };
+      jump();
+      requestAnimationFrame(pinIfSafe);
+      const timeouts = [60, 200, 500, 900, 1500].map(ms => setTimeout(pinIfSafe, ms));
+
+      const onMediaLoad = (e) => {
+        if (e.target && (e.target.tagName === 'IMG' || e.target.tagName === 'VIDEO')) pinIfSafe();
+      };
+      container.addEventListener('load', onMediaLoad, true);
+      setTimeout(() => {
+        container.removeEventListener('load', onMediaLoad, true);
+        container.removeEventListener('wheel', onUserScroll);
+        container.removeEventListener('touchmove', onUserScroll);
+        timeouts.forEach(clearTimeout);
+      }, 2000);
+
+      initialScrollDoneRef.current = true;
+      setShowScrollButton(false);
+      return;
+    }
+
+    const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 150;
     if (isNearBottom) {
-      setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth' }), 120);
+      requestAnimationFrame(() => {
+        scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
+      });
     }
     setShowScrollButton(!isNearBottom);
-  }, [messages.length, optimisticMsgs.length, typingUsers.length]);
+  }, [loading, messages.length, optimisticMsgs.length, typingUsers.length]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -253,11 +379,6 @@ export default function ChatThreadScreen() {
   const scrollToBottom = () => {
     scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
-
-  useEffect(() => {
-    const t = setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth' }), 120);
-    return () => clearTimeout(t);
-  }, [messages.length, optimisticMsgs.length, typingUsers.length]);
 
   useEffect(() => {
     if (!chatId || !auth.currentUser || !rawMessages.length) return;
@@ -283,22 +404,80 @@ export default function ChatThreadScreen() {
     console.log('🎨 Background image URL:', bgStyle.backgroundImage);
   }, [bgStyle]);
 
+  // Build the unreadCount.<recipientId>: increment(1) updates for everyone in
+  // the conversation other than the sender. The sender's own counter is
+  // never bumped — it gets reset to 0 when they open the thread.
+  const buildUnreadIncrements = () => {
+    const updates = {};
+    const me = auth.currentUser?.uid;
+    const participants = chatInfo?.participants || [];
+    for (const pid of participants) {
+      if (pid && pid !== me) updates[`unreadCount.${pid}`] = increment(1);
+    }
+    return updates;
+  };
+
   const sendMsg = async (payload) => {
-    const tempId = `temp-${Date.now()}`;
-    setOptimisticMsgs(prev => [...prev, { id: tempId, senderId: auth.currentUser.uid, createdAt: Timestamp.now(), _status: 'sending', ...payload }]);
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const clientId = `c_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const replyPayload = replyTo ? { id: replyTo.id, text: (replyTo.text || '').slice(0, 100), senderName: replyTo.senderName || 'User', senderId: replyTo.senderId } : null;
+    const fullPayload = { ...payload, clientId, ...(replyPayload ? { replyTo: replyPayload } : {}) };
+
+    setOptimisticMsgs(prev => [...prev, { id: tempId, _clientId: clientId, senderId: auth.currentUser.uid, createdAt: Timestamp.now(), _status: 'sending', ...fullPayload }]);
+
     try {
-      const msgData = { senderId: auth.currentUser.uid, createdAt: serverTimestamp(), ...payload };
-      if (replyTo) { msgData.replyTo = { id: replyTo.id, text: (replyTo.text || '').slice(0, 100), senderName: replyTo.senderName || 'User', senderId: replyTo.senderId }; }
-      await addDoc(collection(db, 'conversations', chatId, 'messages'), msgData);
-      const typeLabels = { image: 'a photo', video: 'a video', voice: 'a voice message', audio: 'an audio file', giphy: 'a GIF', file: 'a file', sticker: 'a sticker', clip: 'a clip', meme: 'a meme' };
-      await updateDoc(doc(db, 'conversations', chatId), { lastMessageText: payload.text || `Sent ${typeLabels[payload.type] || 'a message'}`, lastMessageAt: serverTimestamp(), lastMessageSenderId: auth.currentUser.uid });
+      const relay = httpsCallable(functions, 'relayMessage');
+      await relay({ chatId, ...fullPayload });
       setOptimisticMsgs(prev => prev.filter(m => m.id !== tempId));
     } catch (err) {
-      console.error('Send failed:', err);
-      setOptimisticMsgs(prev => prev.map(m => m.id === tempId ? { ...m, _status: 'failed' } : m));
+      if (isOfflineError(err)) {
+        // Offline — queue for retry. Keep the optimistic message visible as "queued".
+        await enqueueMessage(chatId, fullPayload);
+        setOptimisticMsgs(prev => prev.map(m => m.id === tempId ? { ...m, _status: 'queued' } : m));
+        processQueue().catch(() => {});
+      } else {
+        console.error('Send failed:', err);
+        setOptimisticMsgs(prev => prev.map(m => m.id === tempId ? { ...m, _status: 'failed' } : m));
+      }
     }
     setReplyTo(null);
     clearTyping();
+  };
+
+  const handleDelete = async (msg) => {
+    if (!msg || msg.senderId !== auth.currentUser?.uid) return;
+    setContextMenuMsgId(null);
+    const root = document.getElementById(`msg-${msg.id}`);
+    const bubble = root?.querySelector('[data-msg-bubble]') || root;
+
+    // Await the dissolve's snapshot phase — it now resolves the instant
+    // the dust canvases are on screen (replacing the bubble visually),
+    // then the drift animation continues in the background. This means we
+    // can safely unmount the bubble right after without interrupting the
+    // html2canvas snapshot, and the layout collapses immediately.
+    if (bubble) {
+      try { await dissolveElement(bubble); } catch (err) { console.error('Dissolve failed:', err); }
+    }
+
+    // Optimistic / queued message? Just drop it locally — no Firestore doc.
+    if (msg.id?.startsWith('temp-') || msg._status === 'queued' || msg._status === 'sending' || msg._status === 'failed') {
+      setOptimisticMsgs(prev => prev.filter(m => m.id !== msg.id));
+      return;
+    }
+
+    // Yank it from local state+cache so the UI collapses with no refresh.
+    // onSnapshot's 'removed' event won't fire for messages older than the
+    // sync cutoff, so we can't rely on it.
+    removeLocalMessage?.(msg.id);
+
+    try {
+      const deleteFn = httpsCallable(functions, 'deleteMessage');
+      await deleteFn({ chatId, messageId: msg.id });
+    } catch (err) {
+      console.error('Relay delete failed, falling back to direct delete:', err);
+      try { await deleteDoc(doc(db, 'conversations', chatId, 'messages', msg.id)); }
+      catch (err2) { console.error('Direct delete also failed:', err2); }
+    }
   };
 
   const handleTextSend = async () => {
@@ -319,9 +498,10 @@ export default function ChatThreadScreen() {
     if (type === 'gifs') sendMsg({ type: 'giphy', contentUrl: url });
     else if (type === 'stickers') sendMsg({ type: 'sticker', contentUrl: url });
     else if (type === 'clips') {
-      // Store the gif URL for display, and video URL for playback
-      const gifUrl = item?.formats?.gif || item?.preview || url;
-      const videoUrl = item?.formats?.webm || item?.formats?.mp4 || '';
+      // Klipy's mapClipResults returns a FLAT structure:
+      //   { url: mp4, preview: gif, videoUrl: mp4 }  — not nested under .formats
+      const videoUrl = item?.videoUrl || item?.url || '';
+      const gifUrl = item?.preview || item?.url || url;
       sendMsg({ type: 'clip', contentUrl: gifUrl, videoUrl });
     }
     setShowMedia(null);
@@ -348,7 +528,12 @@ export default function ChatThreadScreen() {
       const url = await uploadMediaFile(file, folder, tier, tierConfig.mediaRetentionDays);
       await addDoc(collection(db, 'conversations', chatId, 'messages'), { senderId: auth.currentUser.uid, createdAt: serverTimestamp(), type: msgType, contentUrl: url, text: caption || (msgType === 'file' ? file.name : ''), fileName: file.name, fileSize: file.size });
       const typeLabels = { image: 'a photo', video: 'a video', audio: 'an audio file', file: 'a file' };
-      await updateDoc(doc(db, 'conversations', chatId), { lastMessageText: caption || `Sent ${typeLabels[msgType]}`, lastMessageAt: serverTimestamp(), lastMessageSenderId: auth.currentUser.uid });
+      await updateDoc(doc(db, 'conversations', chatId), {
+        lastMessageText: caption || `Sent ${typeLabels[msgType]}`,
+        lastMessageAt: serverTimestamp(),
+        lastMessageSenderId: auth.currentUser.uid,
+        ...buildUnreadIncrements(),
+      });
       setOptimisticMsgs(prev => prev.filter(m => m.id !== tempId));
     } catch (err) { console.error('Media send failed:', err); setOptimisticMsgs(prev => prev.map(m => m.id === tempId ? { ...m, _status: 'failed' } : m)); }
   };
@@ -382,8 +567,36 @@ export default function ChatThreadScreen() {
     catch (error) { console.error('Call init failed:', error); }
   };
 
-  const handleMsgLongPress = (msgId) => { longPressTimer.current = setTimeout(() => setContextMenuMsgId(prev => prev === msgId ? null : msgId), 400); };
+  // Track the starting point of a touch so we can cancel the long-press if
+  // the user drags (scroll / swipe-to-reply). Prevents accidental menu
+  // pop-ups during normal scrolling.
+  const longPressStart = useRef({ x: 0, y: 0, pointerId: null, el: null });
+  const LONG_PRESS_MS = 550;
+  const LONG_PRESS_MOVE_SLOP = 10; // px — above this, we treat it as a scroll
+
+  const handleMsgLongPress = (msgId, e) => {
+    // A menu is already open — do nothing. The backdrop owns the close.
+    if (contextMenuMsgId) return;
+    const x = e?.touches?.[0]?.clientX ?? e?.clientX ?? 0;
+    const y = e?.touches?.[0]?.clientY ?? e?.clientY ?? 0;
+    longPressStart.current = { x, y };
+    clearTimeout(longPressTimer.current);
+    longPressTimer.current = setTimeout(() => {
+      setContextMenuPos({ x, y });
+      setContextMenuMsgId(msgId);
+      // Haptic tick so the user feels the menu commit, matching the iOS /
+      // WhatsApp long-press behaviour.
+      try { navigator.vibrate?.(15); } catch {}
+    }, LONG_PRESS_MS);
+  };
   const cancelLongPress = () => clearTimeout(longPressTimer.current);
+  const handleLongPressMove = (e) => {
+    const t = e?.touches?.[0];
+    if (!t) return;
+    const dx = Math.abs(t.clientX - longPressStart.current.x);
+    const dy = Math.abs(t.clientY - longPressStart.current.y);
+    if (dx > LONG_PRESS_MOVE_SLOP || dy > LONG_PRESS_MOVE_SLOP) cancelLongPress();
+  };
 
   const handleSwipeStart = (e, msg) => {
     const touch = e.touches[0];
@@ -568,7 +781,7 @@ export default function ChatThreadScreen() {
           <div className="relative">
             {forwardedLabel}<QuotedReply replyTo={m.replyTo} isMe={isMe} />
             {m.videoUrl ? (
-              <video src={m.videoUrl} poster={m.contentUrl} controls loop className="w-full max-h-64 rounded-sm" preload="metadata" playsInline />
+              <ClipMessagePlayer src={m.videoUrl} poster={m.contentUrl} />
             ) : (
               <img src={m.contentUrl} alt="Clip" className="w-full max-h-64 object-cover rounded-sm" loading="lazy" />
             )}
@@ -685,7 +898,24 @@ export default function ChatThreadScreen() {
   const closeAllPickers = () => { setShowEmoji(false); setShowMedia(null); };
 
   return (
-    <div className={`flex flex-col ${isDesktop ? 'h-screen' : 'h-[100dvh]'} overflow-hidden relative`} style={bgStyle}>
+    <div
+      className={`flex flex-col overflow-hidden ${isDesktop ? 'h-screen relative' : 'fixed inset-0'}`}
+      style={isDesktop
+        ? bgStyle
+        : { height: 'var(--chat-vh, 100dvh)', isolation: 'isolate' }}
+    >
+      {/* Background layer — sized to the large viewport (ignoring the virtual
+          keyboard) so the image doesn't rescale/jump when the keyboard opens
+          and the flex container above shrinks. z-index: -1 (contained by the
+          parent's `isolation: isolate` stacking context) so the emoji / media
+          pickers and message list paint above it without needing their own
+          explicit z-index. */}
+      {!isDesktop && (
+        <div
+          aria-hidden="true"
+          style={{ ...bgStyle, position: 'fixed', inset: 0, height: '100lvh', zIndex: -1, pointerEvents: 'none' }}
+        />
+      )}
 
       {/* Header */}
       <header className="shrink-0 flex items-center gap-3 px-4 h-[52px] z-20" style={{ background: 'rgba(7,8,13,0.55)', backdropFilter: 'blur(20px) saturate(1.4)', WebkitBackdropFilter: 'blur(20px) saturate(1.4)', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
@@ -797,21 +1027,30 @@ export default function ChatThreadScreen() {
                   <div className="relative"
                     style={{ transition: 'transform 0.2s' }}
                     onTouchStart={(e) => handleSwipeStart(e, m)}
-                    onTouchMove={handleSwipeMove}
-                    onTouchEnd={handleSwipeEnd}
-                    onMouseDown={() => handleMsgLongPress(m.id)} onMouseUp={cancelLongPress} onMouseLeave={cancelLongPress}
-                    onContextMenu={(e) => { e.preventDefault(); setContextMenuMsgId(prev => prev === m.id ? null : m.id); }}>
+                    onTouchMove={(e) => { handleSwipeMove(e); handleLongPressMove(e); }}
+                    onTouchEnd={(e) => { handleSwipeEnd(e); cancelLongPress(); }}
+                    onTouchCancel={cancelLongPress}
+                    onTouchStartCapture={(e) => handleMsgLongPress(m.id, e)}
+                    onMouseDown={(e) => handleMsgLongPress(m.id, e)} onMouseUp={cancelLongPress} onMouseLeave={cancelLongPress}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      setContextMenuPos({ x: e.clientX, y: e.clientY });
+                      setContextMenuMsgId(prev => prev === m.id ? null : m.id);
+                    }}>
 
                     {contextMenuMsgId === m.id && (
-                      <MessageContextMenu chatId={chatId} messageId={m.id} message={m} isMe={isMe} onClose={() => setContextMenuMsgId(null)}
-                        onReply={handleReply} onEdit={handleEdit} onPin={handlePin} onForward={setForwardMsg} />
+                      <MessageContextMenu chatId={chatId} messageId={m.id} message={m} isMe={isMe}
+                        anchorX={contextMenuPos.x} anchorY={contextMenuPos.y}
+                        onClose={() => setContextMenuMsgId(null)}
+                        onReply={handleReply} onEdit={handleEdit} onPin={handlePin} onForward={setForwardMsg} onDelete={handleDelete} />
                     )}
 
-                    <div className={`${m.type === 'sticker' ? '' : `rounded-2xl overflow-hidden break-words ${isMe ? 'text-white rounded-br-none' : 'bg-surface-2 text-white border border-white/[0.06] rounded-bl-none'}`} transition-opacity ${isOptimistic ? 'opacity-60' : ''} ${isFailed ? 'opacity-40 ring-1 ring-red-500/50' : ''}`}
+                    <div data-msg-bubble className={`${m.type === 'sticker' ? '' : `rounded-2xl overflow-hidden break-words ${isMe ? 'text-white rounded-br-none' : 'bg-surface-2 text-white border border-white/[0.06] rounded-bl-none'}`} transition-opacity ${isOptimistic ? 'opacity-60' : ''} ${isFailed ? 'opacity-40 ring-1 ring-red-500/50' : ''} ${m._status === 'queued' ? 'opacity-70 ring-1 ring-yellow-500/40' : ''}`}
                       style={m.type === 'sticker' ? undefined : isMe ? { background: '#1a6b5a' } : undefined}>
                       {renderMessageContent(m, isMe)}
                     </div>
 
+                    {m._status === 'queued' && <span className="text-[9px] text-yellow-400/80 font-bold uppercase mt-0.5 px-1 flex items-center gap-1"><Icon name="schedule" size={10} />Queued</span>}
                     {isFailed && <button onClick={() => retryMessage(m)} className="text-[9px] text-red-400 font-bold uppercase mt-0.5 px-1">Retry</button>}
                   </div>
                   {m.reactions && <ReactionBubbles reactions={m.reactions} chatId={chatId} messageId={m.id} isMe={isMe} />}

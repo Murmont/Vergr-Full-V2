@@ -17,8 +17,11 @@ export default function IncomingCallOverlay() {
     const uid = auth.currentUser?.uid;
     if (!uid) return;
 
+    // CRITICAL: must filter by participant. The previous query read EVERY
+    // ringing call worldwide which billed reads for unrelated users' calls.
     const q = query(
       collection(db, 'calls'),
+      where('participants', 'array-contains', uid),
       where('status', '==', 'ringing')
     );
 

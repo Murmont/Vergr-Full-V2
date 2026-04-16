@@ -10,7 +10,6 @@ import PushToast from '../components/PushToast';
 import IncomingCallOverlay from '../components/IncomingCallOverlay';
 import AdminAnnounceScreen from '../screens/admin/AdminAnnounceScreen';
 import DesktopNotificationManager from '../components/DesktopNotificationManager';
-import IncomingCallManager from '../components/IncomingCallManager';
 import NotificationsDrawer from '../components/NotificationsDrawer';
 import MainLayout from '../layouts/MainLayout';
 import MessagesMasterDetail from '../layouts/MessagesMasterDetail';
@@ -19,6 +18,10 @@ import ResponsiveLayout from '../components/ResponsiveLayout';
 import usePresence from '../hooks/usePresence';
 import { useEffect } from 'react';
 import { checkScheduledBackup } from '../utils/chatBackup';
+
+// Vergr.me Link‑in‑Bio
+import VergrMeEditorScreen from '../screens/VergrMeEditorScreen';
+import VergrMePage from '../screens/VergrMePage';
 
 // Renders nothing — just activates the presence system inside the auth context
 function PresenceManager() {
@@ -88,6 +91,10 @@ import QuotePostScreen from '../screens/create/QuotePostScreen';
 
 // Viewers
 import ClipViewerScreen from '../screens/viewer/ClipViewerScreen';
+
+// Shorts
+import ShortsScreen from '../screens/shorts/ShortsScreen';
+import CreateShortScreen from '../screens/create/CreateShortScreen';
 
 // Profile
 import EditProfileScreen from '../screens/profile/EditProfileScreen';
@@ -179,13 +186,12 @@ import AccountDeletionScreen from '../screens/settings/AccountDeletionScreen';
 import DisconnectAccountScreen from '../screens/settings/DisconnectAccountScreen';
 import HelpCenterScreen from '../screens/settings/HelpCenterScreen';
 import HowItWorksScreen from '../screens/settings/HowItWorksScreen';
-import ServiceMarketplaceScreen from '../screens/services/ServiceMarketplaceScreen';
-import CreateServiceScreen from '../screens/services/CreateServiceScreen';
-import ServiceDetailScreen from '../screens/services/ServiceDetailScreen';
 import BoostScreen from '../screens/wallet/BoostScreen';
+import ReferralScreen from '../screens/home/ReferralScreen';
 import CallsScreen from '../screens/calls/CallsScreen';
 import StatusScreen from '../screens/status/StatusScreen';
 import PrivacyPolicyScreen from '../screens/settings/PrivacyPolicyScreen';
+import PhoneAllowListScreen from '../screens/settings/PhoneAllowListScreen';
 
 // Ad Center
 import AdCenterScreen from '../screens/ad/AdCenterScreen';
@@ -201,6 +207,21 @@ import ForceUpdateScreen from '../screens/utility/ForceUpdateScreen';
 import NetworkErrorScreen from '../screens/utility/NetworkErrorScreen';
 import ActivityLogScreen from '../screens/utility/ActivityLogScreen';
 
+// Capture an incoming `?ref=<uid>` invite parameter into localStorage as
+// early as possible. It survives any number of navigations (splash → login
+// → signup → etc.) and is consumed by SignUpStep2 when the user actually
+// creates their account. We run this once at module load so the value is
+// stashed even before React mounts.
+(function captureReferral() {
+  try {
+    const search = typeof window !== 'undefined' ? window.location.search : '';
+    const ref = new URLSearchParams(search).get('ref');
+    if (ref && /^[A-Za-z0-9_-]{6,64}$/.test(ref)) {
+      localStorage.setItem('vergr_ref', ref);
+    }
+  } catch { /* SSR / private-mode — ignore */ }
+})();
+
 export default function AppRouter() {
   return (
     <BrowserRouter>
@@ -214,7 +235,6 @@ export default function AppRouter() {
                   <PushToast />
                   <IncomingCallOverlay />
                   <DesktopNotificationManager />
-                  <IncomingCallManager />
                   <PresenceManager />
                   <BackupChecker />
                   <NotificationsDrawer />
@@ -251,6 +271,9 @@ export default function AppRouter() {
                     <Route path="/update-required" element={<ForceUpdateScreen />} />
                     <Route path="/offline" element={<NetworkErrorScreen />} />
 
+                    {/* Vergr.me public page — no auth required */}
+                    <Route path="/u/:username" element={<VergrMePage />} />
+
                     {/* ---------- PROTECTED MAIN APP (with MainLayout) ---------- */}
                     <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
                       {/* Main tabs */}
@@ -260,6 +283,7 @@ export default function AppRouter() {
 
                       {/* Home */}
                       <Route path="/earn" element={<EarnCoinsScreen />} />
+                      <Route path="/earn/refer" element={<ReferralScreen />} />
                       <Route path="/notifications" element={<NotificationsScreen />} />
                       <Route path="/create-post" element={<Navigate to="/create" replace />} />
                       <Route path="/create-poll" element={<CreatePollScreen />} />
@@ -277,6 +301,10 @@ export default function AppRouter() {
                       <Route path="/create/tierlist" element={<CreateTierListScreen />} />
                       <Route path="/create/achievement" element={<CreateAchievementScreen />} />
                       <Route path="/create/quote" element={<QuotePostScreen />} />
+
+                      {/* Shorts */}
+                      <Route path="/shorts" element={<ShortsScreen />} />
+                      <Route path="/create/short" element={<CreateShortScreen />} />
 
                       {/* Viewers */}
                       <Route path="/clip/:postId" element={<ClipViewerScreen />} />
@@ -356,11 +384,7 @@ export default function AppRouter() {
                       <Route path="/settings/disconnect/:platform" element={<DisconnectAccountScreen />} />
                       <Route path="/settings/help" element={<HelpCenterScreen />} />
                       <Route path="/settings/how-it-works" element={<HowItWorksScreen />} />
-
-                      {/* Services */}
-                      <Route path="/services" element={<ServiceMarketplaceScreen />} />
-                      <Route path="/services/create" element={<CreateServiceScreen />} />
-                      <Route path="/services/:id" element={<ServiceDetailScreen />} />
+                      <Route path="/settings/phone-allowlist" element={<PhoneAllowListScreen />} />
 
                       {/* Boost */}
                       <Route path="/boost" element={<BoostScreen />} />
@@ -386,6 +410,9 @@ export default function AppRouter() {
 
                       {/* Activity */}
                       <Route path="/activity" element={<ActivityLogScreen />} />
+
+                      {/* Vergr.me Editor — Pro user only, protected */}
+                      <Route path="/vergrme/edit" element={<VergrMeEditorScreen />} />
                     </Route>
 
                     {/* ---------- MESSAGES MASTER‑DETAIL ---------- */}

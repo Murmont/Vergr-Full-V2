@@ -1,8 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
-import { db, auth } from '../../firebase/config';
 import { useNotifications } from '../../context/NotificationContext';
 import TopBar from '../../components/TopBar';
 import UserAvatar from '../../components/UserAvatar';
@@ -21,48 +19,35 @@ const NOTIF_ICONS = {
 };
 
 export default function NotificationsScreen() {
-  const [notifications, setNotifications] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const { markAllRead, markRead } = useNotifications();
+  const { notifications: ctxNotifications, markAllRead, markRead } = useNotifications();
   const navigate = useNavigate();
   const { setRightPanel } = useLayout();
+  const loading = ctxNotifications == null;
+
+  // Reuse the shared notifications subscription instead of opening a second
+  // listener (saves another full read of the notifications collection per
+  // visit).
+  const notifications = useMemo(() => {
+    const list = (ctxNotifications || []).map(n => ({
+      ...n,
+      createdAt: n.createdAt?.toDate ? n.createdAt.toDate() : (n.createdAt || new Date()),
+    }));
+    if (list.length === 0) {
+      return [{
+        id: 'welcome-system',
+        type: 'system',
+        content: 'Welcome to Vergr! Start by following creators or posting your first clip.',
+        read: false,
+        createdAt: new Date(),
+      }];
+    }
+    return list;
+  }, [ctxNotifications]);
 
   useEffect(() => {
     setRightPanel(null);
     return () => setRightPanel(null);
   }, [setRightPanel]);
-
-  useEffect(() => {
-    if (!auth.currentUser) return;
-    const q = query(
-      collection(db, 'notifications'),
-      where('recipientId', '==', auth.currentUser.uid),
-      orderBy('createdAt', 'desc')
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      let notifData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt?.toDate() || new Date()
-      }));
-
-      if (notifData.length === 0) {
-        notifData = [{
-          id: 'welcome-system',
-          type: 'system',
-          content: 'Welcome to Vergr! Start by following creators or posting your first clip.',
-          read: false,
-          createdAt: new Date() 
-        }];
-      }
-
-      setNotifications(notifData);
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, []);
 
   const handleNotifClick = async (notif) => {
     if (!notif.read && notif.id !== 'welcome-system') {

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useUser } from '../../context/UserContext';
 import { useUI } from '../../context/UIContext';
-import { updateUserSettings, getBlockedUsers } from '../../firebase/firestore';
+import { updateUserSettings, updateUser, getBlockedUsers } from '../../firebase/firestore';
 import TopBar from '../../components/TopBar';
 import Icon from '../../components/Icon';
 import { useLayout } from '../../context/LayoutContext';
@@ -30,13 +30,31 @@ export default function PrivacySettingsScreen() {
   const navigate = useNavigate();
   const [settings, setSettings] = useState(DEFAULT_PRIVACY);
   const [blockedCount, setBlockedCount] = useState(0);
+  const [phoneVisibility, setPhoneVisibility] = useState('public');
+  const [hasPhone, setHasPhone] = useState(false);
+  const [allowListCount, setAllowListCount] = useState(0);
   const saveTimer = useRef(null);
+  const phoneSaveTimer = useRef(null);
 
   useEffect(() => {
     if (profile?.settings) {
       setSettings(prev => ({ ...prev, ...profile.settings }));
     }
+    if (profile) {
+      setPhoneVisibility(profile.phoneVisibility || 'public');
+      setHasPhone(Boolean(profile.phone || profile.phoneHash));
+      setAllowListCount(Array.isArray(profile.phoneVisibilityAllowList) ? profile.phoneVisibilityAllowList.length : 0);
+    }
   }, [profile]);
+
+  const savePhoneVisibility = (value) => {
+    setPhoneVisibility(value);
+    clearTimeout(phoneSaveTimer.current);
+    phoneSaveTimer.current = setTimeout(async () => {
+      try { await updateUser(currentUser.uid, { phoneVisibility: value }); }
+      catch (err) { console.error(err); showToast('Failed to save', 'error'); }
+    }, 600);
+  };
 
   useEffect(() => {
     if (!currentUser) return;
@@ -121,6 +139,47 @@ export default function PrivacySettingsScreen() {
               </button>
             ))}
           </div>
+        </div>
+
+        {/* Phone number visibility */}
+        <div className="p-4 rounded-2xl bg-surface-1 border border-white/[0.06]">
+          <div className="flex items-center gap-3 mb-3">
+            <Icon name="phone" size={22} className="text-text-secondary" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold">Phone Number Visibility</p>
+              <p className="text-xs text-text-muted">Who can find you by phone number</p>
+            </div>
+          </div>
+          {!hasPhone && (
+            <div className="mb-3 p-2.5 rounded-lg bg-surface-2 text-xs text-text-muted">
+              You haven't added a phone number yet. <button onClick={() => navigate('/messages/new')} className="text-brand-cyan font-bold">Add one</button> to earn 1000 VP.
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-2">
+            {[
+              { value: 'public',   label: 'Everyone',    icon: 'public' },
+              { value: 'contacts', label: 'Mutuals',     icon: 'group' },
+              { value: 'selected', label: 'Selected',    icon: 'person_check' },
+              { value: 'hidden',   label: 'Nobody',      icon: 'lock' },
+            ].map(opt => (
+              <button key={opt.value} onClick={() => savePhoneVisibility(opt.value)}
+                className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                  phoneVisibility === opt.value ? 'bg-brand-cyan/15 border border-brand-cyan/40 text-brand-cyan' : 'bg-surface-2 border border-white/[0.06] text-text-muted'
+                }`}>
+                <Icon name={opt.icon} size={14} /> {opt.label}
+              </button>
+            ))}
+          </div>
+          {phoneVisibility === 'selected' && (
+            <button onClick={() => navigate('/settings/phone-allowlist')}
+              className="mt-3 w-full flex items-center justify-between p-3 rounded-xl bg-surface-2 border border-white/[0.06]">
+              <span className="text-xs font-bold text-text-secondary">Manage allowed users</span>
+              <span className="flex items-center gap-1 text-xs text-text-muted">
+                {allowListCount} {allowListCount === 1 ? 'user' : 'users'}
+                <Icon name="chevron_right" size={16} />
+              </span>
+            </button>
+          )}
         </div>
 
         <button onClick={() => navigate('/settings/blocked-users')}

@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { collection, query, orderBy, limit, onSnapshot, where, getDocs, doc } from 'firebase/firestore';
+import { collection, query, limit, where, getDocs } from 'firebase/firestore';
 import { db } from '../../firebase/config';
-import { getLiveStreams, getSquads, getUser } from '../../firebase/firestore';
+import { getLiveStreams, getSquads, getFeedPosts } from '../../firebase/firestore';
 import Icon from '../../components/Icon';
 import UserAvatar from '../../components/UserAvatar';
 import PostCard from '../../components/PostCard';
@@ -30,20 +30,19 @@ export default function ExploreScreen() {
     return () => { setRightPanel(null); setContentAlign('center'); };
   }, [setRightPanel, setContentAlign]);
 
-  // Load posts
+  // Load posts — one-shot via getFeedPosts which uses the shared author cache.
+  // Was a real-time onSnapshot + N+1 author getDoc per post = ~60 reads per
+  // Explore open. Now ~20 reads on first visit, 0 on cached repeat visits.
   useEffect(() => {
-    const q = query(collection(db, 'posts'), where('status', '==', 'published'), orderBy('createdAt', 'desc'), limit(30));
-    const unsub = onSnapshot(q, async (snap) => {
-      const raw = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      // Load authors
-      const withAuthors = await Promise.all(raw.map(async (p) => {
-        const author = await getUser(p.authorId).catch(() => null);
-        return { ...p, author: author || { displayName: 'User', avatar: null } };
-      }));
-      setPosts(withAuthors);
-      setLoading(false);
-    });
-    return () => unsub();
+    let cancelled = false;
+    (async () => {
+      try {
+        const posts = await getFeedPosts(30) || [];
+        if (!cancelled) setPosts(posts);
+      } catch {}
+      if (!cancelled) setLoading(false);
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   // Load category data

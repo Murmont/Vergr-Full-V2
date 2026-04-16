@@ -1,36 +1,102 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, query, orderBy, limit, onSnapshot, where, getDocs, doc } from 'firebase/firestore';
+import { collection, query, limit, where, getDocs, getDoc, doc } from 'firebase/firestore';
 import { db } from '../firebase/config';
+import { useAuth } from '../context/AuthContext';
+import { followUser, unfollowUser, isFollowing as checkFollowing } from '../firebase/firestore';
 import Icon from './Icon';
 import UserAvatar from './UserAvatar';
 
+// Module-level caches so we don't re-fetch on every sidebar mount.
+// Trending hashtags only update once an hour (Cloud Function), and verified
+// users almost never change — both are perfect candidates for in-memory + LS cache.
+const TRENDING_LS_KEY = 'vergr_trending_tags_v1';
+const SUGGESTED_LS_KEY = 'vergr_suggested_users_v1';
+const TRENDING_TTL_MS = 60 * 60 * 1000; // 1 hour
+const SUGGESTED_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
+
+const _readCache = (key, ttl) => {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || !parsed.savedAt || Date.now() - parsed.savedAt > ttl) return null;
+    return parsed.data;
+  } catch { return null; }
+};
+const _writeCache = (key, data) => {
+  try { localStorage.setItem(key, JSON.stringify({ savedAt: Date.now(), data })); } catch {}
+};
+
 export default function RightSidebarPanel() {
   const navigate = useNavigate();
-  const [trendingTags, setTrendingTags] = useState([]);
-  const [suggestedUsers, setSuggestedUsers] = useState([]);
+  const { currentUser } = useAuth();
+  const [trendingTags, setTrendingTags] = useState(() => _readCache(TRENDING_LS_KEY, TRENDING_TTL_MS) || []);
+  const [suggestedUsers, setSuggestedUsers] = useState(() => _readCache(SUGGESTED_LS_KEY, SUGGESTED_TTL_MS) || []);
+  const [followState, setFollowState] = useState({});
+  const [togglingIds, setTogglingIds] = useState(new Set());
 
   useEffect(() => {
-    // Trending tags — reads from trending/hashtags doc (populated by updateTrending Cloud Function)
-    const unsubTags = onSnapshot(
-      doc(db, 'trending', 'hashtags'),
-      (snap) => {
-        if (snap.exists() && snap.data().tags?.length > 0) {
-          setTrendingTags(snap.data().tags.slice(0, 8).map(t => t.tag || t));
-        } else {
-          setTrendingTags([]);
-        }
-      }
-    );
+    let cancelled = false;
 
-    // Suggested users (creators/verified)
-    const usersQuery = query(collection(db, 'users'), where('isVerified', '==', true), limit(5));
-    getDocs(usersQuery).then(snap => {
-      setSuggestedUsers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }).catch(() => {});
+    // Trending tags — one-shot getDoc (was real-time onSnapshot, even though
+    // the source doc only updates hourly via Cloud Function). Cached for 1h.
+    if (!_readCache(TRENDING_LS_KEY, TRENDING_TTL_MS)) {
+      getDoc(doc(db, 'trending', 'hashtags')).then(snap => {
+        if (cancelled) return;
+        const tags = snap.exists() && snap.data().tags?.length > 0
+          ? snap.data().tags.slice(0, 8).map(t => t.tag || t)
+          : [];
+        setTrendingTags(tags);
+        _writeCache(TRENDING_LS_KEY, tags);
+      }).catch(() => {});
+    }
 
-    return () => unsubTags();
-  }, []);
+    // Suggested users (verified) — one-shot, cached for 6 hours
+    if (!_readCache(SUGGESTED_LS_KEY, SUGGESTED_TTL_MS)) {
+      const usersQuery = query(collection(db, 'users'), where('isVerified', '==', true), limit(8));
+      getDocs(usersQuery).then(snap => {
+        if (cancelled) return;
+        const users = snap.docs
+          .map(d => ({ id: d.id, ...d.data() }))
+          .filter(u => u.id !== currentUser?.uid)
+          .slice(0, 5)
+          .map(u => ({ id: u.id, displayName: u.displayName, username: u.username, avatar: u.avatar, isVerified: u.isVerified }));
+        setSuggestedUsers(users);
+        _writeCache(SUGGESTED_LS_KEY, users);
+      }).catch(() => {});
+    }
+
+    // Preload follow state for whatever users we currently have
+    if (currentUser && suggestedUsers.length > 0) {
+      Promise.all(
+        suggestedUsers.map(u => checkFollowing(currentUser.uid, u.id).catch(() => false))
+      ).then(states => {
+        if (cancelled) return;
+        const map = {};
+        suggestedUsers.forEach((u, i) => { map[u.id] = states[i]; });
+        setFollowState(map);
+      });
+    }
+
+    return () => { cancelled = true; };
+  }, [currentUser, suggestedUsers.length]);
+
+  const handleToggleFollow = async (e, user) => {
+    e.stopPropagation();
+    if (!currentUser || togglingIds.has(user.id)) return;
+    const wasFollowing = !!followState[user.id];
+    setFollowState(s => ({ ...s, [user.id]: !wasFollowing }));
+    setTogglingIds(s => new Set(s).add(user.id));
+    try {
+      if (wasFollowing) await unfollowUser(currentUser.uid, user.id);
+      else await followUser(currentUser.uid, user.id);
+    } catch {
+      setFollowState(s => ({ ...s, [user.id]: wasFollowing }));
+    } finally {
+      setTogglingIds(s => { const n = new Set(s); n.delete(user.id); return n; });
+    }
+  };
 
   return (
     <div className="space-y-5">
@@ -68,22 +134,34 @@ export default function RightSidebarPanel() {
         <div className="bg-surface-1 rounded-2xl border border-white/[0.06] overflow-hidden">
           <h3 className="px-4 pt-4 pb-2 text-sm font-syne font-bold text-text-primary">Who to Follow</h3>
           <div className="divide-y divide-white/[0.04]">
-            {suggestedUsers.map(user => (
-              <button
-                key={user.id}
-                onClick={() => navigate(`/user/${user.id}`)}
-                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-surface-2/40 transition-colors text-left"
-              >
-                <UserAvatar src={user.avatar} size={36} isVerified={user.isVerified} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold text-text-primary truncate">{user.displayName}</p>
-                  <p className="text-xs text-text-muted font-dmmono truncate">@{user.username}</p>
+            {suggestedUsers.map(user => {
+              const isFollowing = !!followState[user.id];
+              return (
+                <div key={user.id} className="flex items-center gap-3 px-4 py-3 hover:bg-surface-2/40 transition-colors">
+                  <button
+                    onClick={() => navigate(`/user/${user.id}`)}
+                    className="flex items-center gap-3 flex-1 min-w-0 text-left"
+                  >
+                    <UserAvatar src={user.avatar} size={36} isVerified={user.isVerified} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-text-primary truncate">{user.displayName}</p>
+                      <p className="text-xs text-text-muted font-dmmono truncate">@{user.username}</p>
+                    </div>
+                  </button>
+                  <button
+                    onClick={(e) => handleToggleFollow(e, user)}
+                    disabled={togglingIds.has(user.id)}
+                    className={`px-3 py-1 rounded-full text-[10px] font-bold border transition-colors ${
+                      isFollowing
+                        ? 'bg-surface-2 text-text-secondary border-white/[0.08] hover:border-brand-ember hover:text-brand-ember'
+                        : 'bg-brand-cyan/10 text-brand-cyan border-brand-cyan/20 hover:bg-brand-cyan/20'
+                    }`}
+                  >
+                    {isFollowing ? 'Following' : 'Follow'}
+                  </button>
                 </div>
-                <span className="px-3 py-1 rounded-full bg-brand-cyan/10 text-brand-cyan text-[10px] font-bold border border-brand-cyan/20">
-                  Follow
-                </span>
-              </button>
-            ))}
+              );
+            })}
           </div>
           <button 
             onClick={() => navigate('/browse-creators')}

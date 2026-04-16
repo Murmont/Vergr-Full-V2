@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx vite:*)",
+      "Bash(npx firebase:*)",
+      "Bash(npm run:*)",
+      "Bash(node -c index.js)",
+      "Bash(firebase deploy:*)",
+      "Bash(curl -s \"https://europe-west1-vergr-44494.cloudfunctions.net/backfillNewsPosts\")",
+      "Bash(curl -s \"https://europe-west1-vergr-44494.cloudfunctions.net/storageAudit\")",
+      "Bash(curl -s \"https://europe-west1-vergr-44494.cloudfunctions.net/cleanupExpiredMediaNow\")",
+      "Bash(node -e \"import\\('./src/firebase/firestore.js'\\).then\\(m=>console.log\\('OK',Object.keys\\(m\\).filter\\(k=>k.includes\\('Quest'\\)||k==='recordAdWatch'\\)\\)\\).catch\\(e=>{console.error\\('FAIL',e.message\\);process.exit\\(1\\)}\\)\")",
+      "Bash(node --check src/firebase/firestore.js)",
+      "Bash(node --check src/components/WatchToEarnQuest.jsx)",
+      "Bash(node --check src/components/VergrAd.jsx)",
+      "Bash(node --check src/utils/interstitialAd.js)",
+      "Bash(node --check src/config/ads.js)",
+      "Bash(npx firebase-tools:*)",
+      "Bash(gcloud --version)",
+      "Bash(where gcloud:*)",
+      "Read(//c/Program Files \\(x86\\)/Google/Cloud SDK/google-cloud-sdk/**)",
+      "Bash(rustc --version)",
+      "Bash(cargo --version)",
+      "Bash(node scripts/copy-desktop-installer.mjs)",
+      "Bash(curl -sI \"https://vergr-44494.web.app/downloads/VERGR-Setup.exe\")",
+      "Bash(curl -sI \"https://vergr-44494.web.app/downloads/\")",
+      "Bash(npm uninstall:*)",
+      "Bash(ls -la dist/assets/index-*.js)",
+      "Bash(ls src/components/Notification* src/components/*Notification* src/context/NotificationContext.jsx public/firebase-messaging-sw.js)",
+      "Bash(npm install:*)",
+      "Bash(node -e \"require\\('./index.js'\\); console.log\\('OK'\\)\")",
+      "Bash(ls \"C:/Users/damie/Downloads/GitHub/vergr-Full-v2/.env\"*)"
+    ]
+  }
+}

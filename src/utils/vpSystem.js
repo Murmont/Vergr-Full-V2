@@ -71,7 +71,6 @@ export const VP_ACTIONS = {
   win_tournament:    200,
   squad_message:     1,
   complete_quest:    20,
-  complete_service:  30,  // deliver a service
   purchase_coins:    25,  // buy any coin pack
   boost_post:        10,
 };
@@ -94,18 +93,6 @@ export const COIN_PACKS = [
   { id: 'premium',  name: 'Premium',  coins: 2500,  bonus: 500,  priceEUR: 19.99 },
   { id: 'whale',    name: 'Whale',    coins: 6500,  bonus: 1500, priceEUR: 49.99 },
   { id: 'mega',     name: 'Mega',     coins: 15000, bonus: 5000, priceEUR: 99.99 },
-];
-
-// ── SERVICE CATEGORIES ──
-export const SERVICE_CATEGORIES = [
-  { id: 'coaching',    label: 'Game Coaching',       icon: 'school',         desc: '1v1 sessions, ranked climbing' },
-  { id: 'editing',     label: 'Video Editing',       icon: 'movie_edit',     desc: 'Highlights, montages, intros' },
-  { id: 'design',      label: 'Graphic Design',      icon: 'palette',        desc: 'Thumbnails, banners, overlays' },
-  { id: 'moderation',  label: 'Stream Moderation',   icon: 'shield',         desc: 'Hired by creators/squads' },
-  { id: 'tournament',  label: 'Tournament Organiser', icon: 'emoji_events',  desc: 'Run tournaments for squads' },
-  { id: 'social',      label: 'Social Media',        icon: 'campaign',       desc: 'Post scheduling, engagement' },
-  { id: 'writing',     label: 'Content Writing',     icon: 'edit_note',      desc: 'Articles, guides, reviews' },
-  { id: 'other',       label: 'Other',               icon: 'more_horiz',     desc: 'Custom services' },
 ];
 
 // ── ECONOMY CONSTANTS ──

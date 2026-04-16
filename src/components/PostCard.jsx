@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
@@ -7,9 +7,10 @@ import UserAvatar from './UserAvatar';
 import Icon from './Icon';
 import PollCard from './PollCard';
 import TierBadge from './TierBadge';
+import EmbedVideoPlayer from './EmbedVideoPlayer';
 import { timeAgo } from '../utils/helpers';
 
-function MediaContent({ post }) {
+function MediaContent({ post, onImageClick }) {
   const urls = post.mediaUrls?.length > 0 ? post.mediaUrls : (post.mediaUrl ? [post.mediaUrl] : []);
   if (urls.length === 0) return null;
   const isVideo = post.type === 'video' || post.type === 'clip';
@@ -17,8 +18,17 @@ function MediaContent({ post }) {
   if (isVideo) {
     return (
       <div className="mt-3 rounded-2xl overflow-hidden border border-white/[0.06] relative">
-        <video src={urls[0]} controls playsInline poster={post.thumbnailUrl}
-          className="w-full h-auto max-h-[400px] object-contain bg-black" />
+        <video
+          src={urls[0]}
+          controls
+          playsInline
+          muted
+          preload="metadata"
+          poster={post.thumbnailUrl}
+          data-feed-video="1"
+          className="w-full h-auto max-h-[400px] object-contain bg-black"
+          onClick={(e) => e.stopPropagation()}
+        />
         {post.type === 'clip' && (
           <div className="absolute top-2 left-2 px-2 py-0.5 rounded-lg bg-brand-ember/90 text-white text-[9px] font-bold uppercase tracking-wider">Clip</div>
         )}
@@ -26,13 +36,15 @@ function MediaContent({ post }) {
     );
   }
 
+  const openAt = (i) => (e) => { e.stopPropagation(); onImageClick?.(urls, i); };
+
   if (urls.length > 1) {
     return (
       <div className="mt-3 flex gap-1 rounded-2xl overflow-hidden border border-white/[0.06]">
-        <img src={urls[0]} alt="" className="flex-1 h-48 object-cover" loading="lazy" />
+        <img src={urls[0]} alt="" onClick={openAt(0)} className="flex-1 h-48 object-cover cursor-zoom-in" loading="lazy" />
         <div className="flex flex-col gap-1 w-24">
-          {urls.slice(1, 3).map((url, i) => <img key={i} src={url} alt="" className="flex-1 object-cover" loading="lazy" />)}
-          {urls.length > 3 && <div className="flex-1 bg-surface-2 flex items-center justify-center text-text-muted text-xs font-bold">+{urls.length - 3}</div>}
+          {urls.slice(1, 3).map((url, i) => <img key={i} src={url} alt="" onClick={openAt(i + 1)} className="flex-1 object-cover cursor-zoom-in" loading="lazy" />)}
+          {urls.length > 3 && <div className="flex-1 bg-surface-2 flex items-center justify-center text-text-muted text-xs font-bold cursor-zoom-in" onClick={openAt(3)}>+{urls.length - 3}</div>}
         </div>
       </div>
     );
@@ -40,7 +52,33 @@ function MediaContent({ post }) {
 
   return (
     <div className="mt-3 rounded-2xl overflow-hidden border border-white/[0.06]">
-      <img src={urls[0]} alt="" className="w-full h-auto max-h-[400px] object-cover" loading="lazy" />
+      <img src={urls[0]} alt="" onClick={openAt(0)} className="w-full h-auto max-h-[400px] object-cover cursor-zoom-in" loading="lazy" />
+    </div>
+  );
+}
+
+function ImageLightbox({ urls, startIndex, onClose }) {
+  const [i, setI] = useState(startIndex);
+  useEffect(() => {
+    const k = (e) => {
+      if (e.key === 'Escape') onClose();
+      else if (e.key === 'ArrowRight') setI(x => Math.min(x + 1, urls.length - 1));
+      else if (e.key === 'ArrowLeft') setI(x => Math.max(x - 1, 0));
+    };
+    window.addEventListener('keydown', k);
+    return () => window.removeEventListener('keydown', k);
+  }, [urls.length, onClose]);
+  return (
+    <div className="fixed inset-0 z-[200] bg-black/95 flex items-center justify-center" onClick={onClose}>
+      <button onClick={onClose} className="absolute top-4 right-4 z-10 w-10 h-10 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center text-white"><Icon name="close" size={22} /></button>
+      <img src={urls[i]} alt="" className="max-w-full max-h-full object-contain" onClick={e => e.stopPropagation()} />
+      {urls.length > 1 && (
+        <>
+          {i > 0 && <button onClick={e => { e.stopPropagation(); setI(i - 1); }} className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center text-white"><Icon name="chevron_left" size={24} /></button>}
+          {i < urls.length - 1 && <button onClick={e => { e.stopPropagation(); setI(i + 1); }} className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center text-white"><Icon name="chevron_right" size={24} /></button>}
+          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 text-white/70 text-xs font-dmmono">{i + 1} / {urls.length}</div>
+        </>
+      )}
     </div>
   );
 }
@@ -150,7 +188,8 @@ function EmbeddedPost({ post, onClick }) {
   );
 }
 
-export default function PostCard({ post, onDeleted }) {
+
+export default function PostCard({ post, onDeleted, onLikeUpdate }) {
   const navigate = useNavigate();
   const { currentUser } = useAuth();
   const [liked, setLiked] = useState(false);
@@ -167,11 +206,21 @@ export default function PostCard({ post, onDeleted }) {
   const [bookmarking, setBookmarking] = useState(false);
   const [reposting, setReposting] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const [lightbox, setLightbox] = useState(null); // { urls, index }
 
   const originalPostId = post.repostOf || post.quotedPostId;
   const isRepostType = post.type === 'repost';
   const isQuoteType = post.type === 'quote';
   const isOwnPost = currentUser?.uid === post.authorId;
+
+  const fullContent = post.previewText || post.content || '';
+  const shouldTruncate = fullContent.length > 300 && post.type !== 'poll' && post.type !== 'lfg' && post.type !== 'article' && post.type !== 'tierlist' && post.type !== 'achievement';
+  const displayContent = shouldTruncate && !expanded ? fullContent.slice(0, 300) + '...' : fullContent;
+
+  useEffect(() => {
+    setLikeCount(post.likeCount || 0);
+  }, [post.likeCount]);
 
   useEffect(() => {
     if (!currentUser?.uid || !post.id) return;
@@ -198,13 +247,19 @@ export default function PostCard({ post, onDeleted }) {
     if (!currentUser || liking) return;
     setLiking(true);
     const wasLiked = liked;
+    const oldCount = likeCount;
     setLiked(!wasLiked);
-    setLikeCount(prev => wasLiked ? Math.max(0, prev - 1) : prev + 1);
+    const newCount = wasLiked ? oldCount - 1 : oldCount + 1;
+    setLikeCount(newCount);
     try {
       await toggleLike(post.id, currentUser.uid);
+      if (onLikeUpdate) {
+        onLikeUpdate(post.id, newCount, !wasLiked);
+      }
     } catch (err) {
       setLiked(wasLiked);
-      setLikeCount(prev => wasLiked ? prev + 1 : Math.max(0, prev - 1));
+      setLikeCount(oldCount);
+      console.error('Like error:', err);
     }
     setLiking(false);
   };
@@ -252,7 +307,11 @@ export default function PostCard({ post, onDeleted }) {
   };
 
   const handleShareLink = async () => {
-    const postUrl = `${window.location.origin}/#/post/${post.id}`;
+    // /share/post/:id is server-rendered with Open Graph tags so messengers
+    // (WhatsApp, Discord, etc.) show a real preview card with title + image
+    // instead of our SPA's default tags.
+    const shareKind = (post.type === 'clip' || post.type === 'video') ? 'clip' : 'post';
+    const postUrl = `${window.location.origin}/share/${shareKind}/${post.id}`;
     if (navigator.share) {
       try {
         await navigator.share({ title: post.content?.slice(0, 50) || 'Check this out on VERGR', url: postUrl });
@@ -286,7 +345,8 @@ export default function PostCard({ post, onDeleted }) {
   };
 
   const handleCopyLink = () => {
-    navigator.clipboard?.writeText(`${window.location.origin}/#/post/${post.id}`);
+    const shareKind = (post.type === 'clip' || post.type === 'video') ? 'clip' : 'post';
+    navigator.clipboard?.writeText(`${window.location.origin}/share/${shareKind}/${post.id}`);
     setShowMenu(false);
   };
 
@@ -328,17 +388,39 @@ export default function PostCard({ post, onDeleted }) {
               <span className="text-text-muted text-xs shrink-0">· {timeAgo((contentPost || post).createdAt)}</span>
             </div>
 
-            {!isRepostType && contentPost?.content && contentPost.type !== 'article' && (
-              <p className="text-text-primary text-[15px] leading-relaxed mt-1.5 whitespace-pre-wrap cursor-pointer" onClick={goToPost}>{contentPost.content}</p>
+            {!isRepostType && contentPost?.type !== 'article' && (
+              <div className="mt-1.5">
+                <p className="text-text-primary text-[15px] leading-relaxed whitespace-pre-wrap break-words cursor-pointer" onClick={goToPost}>
+                  {displayContent}
+                </p>
+                {shouldTruncate && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
+                    className="text-brand-cyan text-xs font-semibold mt-1 hover:underline"
+                  >
+                    {expanded ? 'Show less' : 'Read more'}
+                  </button>
+                )}
+              </div>
             )}
 
-            {!isRepostType && (
+            {!isRepostType && (post.youtubeVideoId || post.embedVideoUrl) && (
+              <EmbedVideoPlayer
+                videoId={post.youtubeVideoId}
+                videoUrl={post.embedVideoUrl}
+                onClickFullscreen={() => {
+                  if (post.youtubeVideoId) navigate(`/clip/${post.id}`);
+                }}
+              />
+            )}
+
+            {!isRepostType && !(post.youtubeVideoId || post.embedVideoUrl) && (
               <>
                 {(contentPost?.type === 'photo' || contentPost?.type === 'carousel' || contentPost?.type === 'video' || contentPost?.type === 'clip' || contentPost?.type === 'media') && (
-                  <div className="cursor-pointer" onClick={goToPost}><MediaContent post={contentPost} /></div>
+                  <MediaContent post={contentPost} onImageClick={(urls, i) => setLightbox({ urls, index: i })} />
                 )}
                 {contentPost?.type === 'text' && (contentPost?.mediaUrl || contentPost?.mediaUrls?.length > 0) && (
-                  <div className="cursor-pointer" onClick={goToPost}><MediaContent post={contentPost} /></div>
+                  <MediaContent post={contentPost} onImageClick={(urls, i) => setLightbox({ urls, index: i })} />
                 )}
                 {contentPost?.type === 'poll' && <PollCard post={contentPost} />}
                 {contentPost?.type === 'lfg' && <LFGContent data={contentPost?.lfgData} />}
@@ -469,6 +551,10 @@ export default function PostCard({ post, onDeleted }) {
             )}
           </div>
         </div>
+
+        {lightbox && (
+          <ImageLightbox urls={lightbox.urls} startIndex={lightbox.index} onClose={() => setLightbox(null)} />
+        )}
 
         {/* Report modal */}
         {showReportModal && (

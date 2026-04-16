@@ -57,10 +57,18 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read: if true;
-      allow create: if isOwner(userId);
-      allow update: if isOwner(userId) || isModerator() || (
-        isAuth() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followerCount', 'followingCount'])
-      );
+      allow create: if isOwner(userId)
+        // Block self-referral on initial doc create
+        && (!('referredBy' in request.resource.data) || request.resource.data.referredBy != userId);
+      allow update: if (isOwner(userId) && (
+          // referredBy is write-once: either it didn't exist before, or it's unchanged
+          !('referredBy' in resource.data) || resource.data.referredBy == request.resource.data.get('referredBy', resource.data.referredBy)
+        ) && (
+          // Cannot self-refer
+          !('referredBy' in request.resource.data) || request.resource.data.referredBy != userId
+        ))
+        || isModerator()
+        || (isAuth() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followerCount', 'followingCount']));
       allow delete: if isAdmin();
 
       match /private/{docId} {
@@ -388,31 +396,6 @@ service cloud.firestore {
     match /quest_claims/{claimId} {
       allow read: if isAuth();
       allow create, update, delete: if false;
-    }
-
-    // ============================================================
-    // SERVICES
-    // ============================================================
-
-    match /services/{serviceId} {
-      allow read: if true;
-      allow create: if isAuth() && request.resource.data.sellerId == request.auth.uid;
-      allow update: if isAuth() && resource.data.sellerId == request.auth.uid;
-      allow delete: if isAuth() && resource.data.sellerId == request.auth.uid;
-    }
-
-    match /service_orders/{orderId} {
-      allow read: if isAuth() && (
-        resource.data.buyerId == request.auth.uid ||
-        resource.data.sellerId == request.auth.uid ||
-        isAdmin()
-      );
-      allow create: if false;
-      allow update: if isAuth() && (
-        resource.data.buyerId == request.auth.uid ||
-        resource.data.sellerId == request.auth.uid
-      );
-      allow delete: if false;
     }
 
     // ============================================================

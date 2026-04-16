@@ -5,20 +5,18 @@ import { useUser } from '../context/UserContext';
 import { useNotifications } from '../context/NotificationContext';
 import Icon from './Icon';
 import UserAvatar from './UserAvatar';
-import VPLevelBadge from './VPLevelBadge';
-import { getVPLevel } from '../utils/vpSystem';
 import CreatePostModal from './CreatePostModal';
 
 const NAV_ITEMS = [
   { path: '/', icon: 'home', label: 'Home' },
   { path: '/explore', icon: 'explore', label: 'Explore' },
+  { path: '/shorts', icon: 'slow_motion_video', label: 'Shorts' },
   { path: '/messages', icon: 'chat_bubble', label: 'Messages' },
   { path: '/calls', icon: 'call', label: 'Calls' },
   { path: '/status', icon: 'amp_stories', label: 'Status' },
   { path: '/squads', icon: 'groups', label: 'Squads' },
   { path: '/tournaments', icon: 'emoji_events', label: 'Tournaments' },
   { path: '/wallet', icon: 'account_balance_wallet', label: 'Wallet' },
-  { path: '/services', icon: 'work', label: 'Services' },
   { path: '/leaderboard', icon: 'leaderboard', label: 'Leaderboard' },
   { path: '/ad-center', icon: 'campaign', label: 'Ad Center' },
   { path: '/settings', icon: 'settings', label: 'Settings' },
@@ -27,7 +25,7 @@ const NAV_ITEMS = [
 export default function DesktopSidebar() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { profile, wallet } = useUser();
+  const { profile } = useUser();
   const { unreadChatCount } = useNotifications();
   const [showCreateModal, setShowCreateModal] = useState(false);
 
@@ -56,11 +54,10 @@ export default function DesktopSidebar() {
     return 0;
   };
 
-  const vpLevel = getVPLevel(wallet?.vp || 0);
   const W = collapsed ? 'w-[72px]' : 'w-[260px]';
 
   return (
-    <aside className={`fixed left-0 top-0 bottom-0 ${W} bg-surface-1 border-r border-white/[0.06] flex flex-col z-50 overflow-y-auto no-scrollbar transition-all duration-200`}>
+    <aside className={`fixed left-0 top-0 bottom-0 ${W} bg-surface-1 border-r border-white/[0.06] flex flex-col z-50 transition-all duration-200`}>
       {/* Header */}
       <div className={`px-3 py-4 flex items-center border-b border-white/[0.03] ${collapsed ? 'justify-center' : 'justify-between'}`}>
         {!collapsed && (
@@ -82,45 +79,6 @@ export default function DesktopSidebar() {
           </div>
         )}
       </button>
-
-      {/* Currencies */}
-      <div className={`mx-2 mt-2 rounded-xl bg-surface-2/30 border border-white/[0.04] ${collapsed ? 'p-2 space-y-2' : 'p-2 flex items-center gap-1'}`}>
-        {collapsed ? (
-          <>
-            <div className="flex flex-col items-center gap-0.5" title={`${(wallet?.balance || 0).toLocaleString()} Coins`}>
-              <Icon name="paid" size={14} className="text-brand-gold" />
-              <span className="text-[8px] font-bold font-dmmono text-brand-gold">{(wallet?.balance || 0).toLocaleString()}</span>
-            </div>
-            <div className="flex flex-col items-center gap-0.5" title={`${(wallet?.gems || 0).toLocaleString()} Gems`}>
-              <Icon name="diamond" size={14} className="text-brand-cyan" />
-              <span className="text-[8px] font-bold font-dmmono text-brand-cyan">{(wallet?.gems || 0).toLocaleString()}</span>
-            </div>
-            <div className="flex flex-col items-center gap-0.5" title={`${vpLevel.name} · ${(wallet?.vp || 0).toLocaleString()} VP`}>
-              <Icon name="star" size={14} className="text-brand-violet" />
-              <span className="text-[8px] font-bold font-dmmono text-brand-violet">{(wallet?.vp || 0).toLocaleString()}</span>
-            </div>
-          </>
-        ) : (
-          <>
-            <button onClick={() => navigate('/wallet')} className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg hover:bg-surface-2/50 transition-colors" title="Coins — buy to spend">
-              <Icon name="paid" size={14} className="text-brand-gold" />
-              <span className="text-xs font-bold font-dmmono text-brand-gold">{(wallet?.balance || 0).toLocaleString()}</span>
-            </button>
-            <div className="w-px h-5 bg-border-accent/30" />
-            <button onClick={() => navigate('/wallet')} className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg hover:bg-surface-2/50 transition-colors" title="Gems — cashable earnings">
-              <Icon name="diamond" size={14} className="text-brand-cyan" />
-              <span className="text-xs font-bold font-dmmono text-brand-cyan">{(wallet?.gems || 0).toLocaleString()}</span>
-            </button>
-            <div className="w-px h-5 bg-border-accent/30" />
-            <button onClick={() => navigate('/wallet')} className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg hover:bg-surface-2/50 transition-colors" title={`${vpLevel.name} · VP for levels & perks`}>
-              <Icon name="star" size={14} className="text-brand-violet" />
-              <span className="text-xs font-bold font-dmmono text-brand-violet">{(wallet?.vp || 0).toLocaleString()}</span>
-            </button>
-          </>
-        )}
-      </div>
-
-      {!collapsed && <div className="mx-2 mt-1 px-2"><VPLevelBadge vp={wallet?.vp || 0} size="sm" /></div>}
 
       {/* Navigation */}
       <nav className="flex-1 px-2 mt-3 space-y-0.5">

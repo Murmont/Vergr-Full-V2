@@ -5,6 +5,8 @@ import {
   increment, arrayUnion, arrayRemove, writeBatch, runTransaction,
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { compressMedia } from '../utils/mediaCompression';
+import { ADS_CONFIG } from '../config/ads';
 
 // ═══════════════════════════════════════════
 // USERS
@@ -123,9 +125,10 @@ export const getFollowers = async (uid) => {
 // POSTS
 // ═══════════════════════════════════════════
 
-export const createPost = async (authorId, { 
+export const createPost = async (authorId, {
   content, type = 'text', mediaUrls = [], hashtags = [], pollOptions = [],
-  linkPreview = null, lfgData = null, articleData = null, tierListData = null, achievementData = null 
+  linkPreview = null, lfgData = null, articleData = null, tierListData = null, achievementData = null,
+  embedVideoUrl = null, youtubeVideoId = null, thumbnailUrl = null
 }) => {
   const postData = {
     authorId,
@@ -150,10 +153,17 @@ export const createPost = async (authorId, {
   if (articleData) postData.articleData = articleData;
   if (tierListData) postData.tierListData = tierListData;
   if (achievementData) postData.achievementData = achievementData;
+  if (embedVideoUrl) postData.embedVideoUrl = embedVideoUrl;
+  if (youtubeVideoId) postData.youtubeVideoId = youtubeVideoId;
+  if (thumbnailUrl) postData.thumbnailUrl = thumbnailUrl;
   if (type === 'lfg') postData.expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-  const postRef = await addDoc(collection(db, 'posts'), postData);
-  await updateDoc(doc(db, 'users', authorId), { postCount: increment(1) });
+  // Batch the post insert + author postCount bump in one round-trip.
+  const postRef = doc(collection(db, 'posts'));
+  const batch = writeBatch(db);
+  batch.set(postRef, postData);
+  batch.update(doc(db, 'users', authorId), { postCount: increment(1) });
+  await batch.commit();
   return postRef.id;
 };
 
@@ -164,57 +174,104 @@ export const updatePostMediaUrl = async (postId, url) => {
   });
 };
 
-export const getFeedPosts = async (limitCount = 20, lastDoc = null) => {
-  let q = query(
-    collection(db, 'posts'), 
-    where('status', '==', 'published'), 
-    orderBy('createdAt', 'desc'), 
-    limit(limitCount)
-  );
-  
-  if (lastDoc) q = query(q, startAfter(lastDoc));
-  
-  const snap = await getDocs(q);
-  const posts = [];
-  for (const d of snap.docs) {
-    const post = { id: d.id, ...d.data(), _doc: d };
-    const author = await getUser(post.authorId);
-    post.author = author || { displayName: 'Vergr Member', avatar: null };
-    posts.push(post);
+// Author cache: in-memory + persisted to localStorage with a 6h TTL.
+// Without persistence we'd re-fetch all 20+ authors on every cold page load,
+// which was ~40 reads per feed open per user. With it, repeat loads cost 0 reads.
+const _authorCache = new Map();
+const AUTHOR_CACHE_LS_KEY = 'vergr_author_cache_v1';
+const AUTHOR_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+
+(function _restoreAuthorCache() {
+  try {
+    const raw = localStorage.getItem(AUTHOR_CACHE_LS_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    if (!parsed || !parsed.savedAt || Date.now() - parsed.savedAt > AUTHOR_CACHE_TTL_MS) return;
+    for (const [id, author] of Object.entries(parsed.authors || {})) {
+      _authorCache.set(id, author);
+    }
+  } catch {}
+})();
+
+let _authorCacheFlushTimer = null;
+const _scheduleAuthorCacheFlush = () => {
+  if (_authorCacheFlushTimer) return;
+  _authorCacheFlushTimer = setTimeout(() => {
+    _authorCacheFlushTimer = null;
+    try {
+      const obj = {};
+      // Only persist truthy entries — skip nulls so we re-try them next time
+      _authorCache.forEach((v, k) => { if (v) obj[k] = { displayName: v.displayName, avatar: v.avatar, username: v.username, isVerified: v.isVerified, verificationTier: v.verificationTier, id: v.id }; });
+      localStorage.setItem(AUTHOR_CACHE_LS_KEY, JSON.stringify({ savedAt: Date.now(), authors: obj }));
+    } catch {}
+  }, 500);
+};
+
+const _hydrateAuthors = async (posts) => {
+  const uniqueIds = [...new Set(posts.map(p => p.authorId).filter(Boolean))];
+  const missing = uniqueIds.filter(id => !_authorCache.has(id));
+  if (missing.length > 0) {
+    const fetched = await Promise.all(missing.map(id => getUser(id).catch(() => null)));
+    missing.forEach((id, i) => _authorCache.set(id, fetched[i] || null));
+    _scheduleAuthorCacheFlush();
+  }
+  for (const post of posts) {
+    post.author = _authorCache.get(post.authorId) || { displayName: 'Vergr Member', avatar: null };
   }
   return posts;
 };
 
-export const getFollowingFeedPosts = async (userId, limitCount = 20) => {
+export const getFeedPosts = async (limitCount = 20, lastDoc = null) => {
+  let q = query(
+    collection(db, 'posts'),
+    where('status', '==', 'published'),
+    orderBy('createdAt', 'desc'),
+    limit(limitCount)
+  );
+
+  if (lastDoc) q = query(q, startAfter(lastDoc));
+
+  const snap = await getDocs(q);
+  const posts = snap.docs.map(d => ({ id: d.id, ...d.data(), _doc: d }));
+  await _hydrateAuthors(posts);
+  // Attach last doc for cursor-based pagination
+  if (posts.length > 0) posts._lastDoc = snap.docs[snap.docs.length - 1];
+  return posts;
+};
+
+export const getFollowingFeedPosts = async (userId, limitCount = 20, lastDoc = null) => {
   // Get list of users this person follows
   const followsSnap = await getDocs(query(collection(db, 'follows'), where('followerId', '==', userId)));
   const followingIds = followsSnap.docs.map(d => d.data().followingId).filter(Boolean);
 
   if (followingIds.length === 0) return [];
 
-  // Firestore 'in' supports max 30 items — chunk if needed
-  const posts = [];
+  // Firestore 'in' supports max 30 items — chunk if needed, fetch in parallel
   const chunks = [];
   for (let i = 0; i < followingIds.length; i += 30) {
     chunks.push(followingIds.slice(i, i + 30));
   }
 
-  for (const chunk of chunks) {
-    const q = query(
-      collection(db, 'posts'),
-      where('status', '==', 'published'),
-      where('authorId', 'in', chunk),
-      orderBy('createdAt', 'desc'),
-      limit(limitCount)
-    );
-    const snap = await getDocs(q);
-    for (const d of snap.docs) {
-      const post = { id: d.id, ...d.data() };
-      const author = await getUser(post.authorId);
-      post.author = author || { displayName: 'Vergr Member', avatar: null };
-      posts.push(post);
-    }
+  const chunkResults = await Promise.all(
+    chunks.map(chunk => {
+      let q = query(
+        collection(db, 'posts'),
+        where('status', '==', 'published'),
+        where('authorId', 'in', chunk),
+        orderBy('createdAt', 'desc'),
+        limit(limitCount)
+      );
+      if (lastDoc) q = query(q, startAfter(lastDoc));
+      return getDocs(q);
+    })
+  );
+
+  const posts = [];
+  for (const snap of chunkResults) {
+    for (const d of snap.docs) posts.push({ id: d.id, ...d.data(), _doc: d });
   }
+
+  await _hydrateAuthors(posts);
 
   // Sort by date and take top N
   posts.sort((a, b) => {
@@ -222,30 +279,42 @@ export const getFollowingFeedPosts = async (userId, limitCount = 20) => {
     const bTime = b.createdAt?.toMillis ? b.createdAt.toMillis() : new Date(b.createdAt).getTime();
     return bTime - aTime;
   });
-  return posts.slice(0, limitCount);
+  const sliced = posts.slice(0, limitCount);
+  if (sliced.length > 0) sliced._lastDoc = sliced[sliced.length - 1]._doc;
+  return sliced;
 };
 
-export const getTrendingPosts = async (limitCount = 20) => {
-  // Use rankScore calculated by the calculateRankScores Cloud Function
-  // Falls back to likeCount ordering if rankScore hasn't been set yet
-  const q = query(
+export const getTrendingPosts = async (limitCount = 20, lastDoc = null) => {
+  let q = query(
     collection(db, 'posts'),
     where('status', '==', 'published'),
     orderBy('rankScore', 'desc'),
     limit(limitCount)
   );
+  if (lastDoc) q = query(q, startAfter(lastDoc));
   const snap = await getDocs(q);
-  const posts = [];
-  for (const d of snap.docs) {
-    const post = { id: d.id, ...d.data() };
-    // Skip posts with zero engagement
-    if ((post.likeCount || 0) + (post.commentCount || 0) + (post.shareCount || 0) === 0) continue;
-    const author = await getUser(post.authorId);
-    post.author = author || { displayName: 'Vergr Member', avatar: null };
-    posts.push(post);
-  }
+  const posts = snap.docs
+    .map(d => ({ id: d.id, ...d.data(), _doc: d }))
+    .filter(p => (p.likeCount || 0) + (p.commentCount || 0) + (p.shareCount || 0) > 0);
+  await _hydrateAuthors(posts);
+  if (posts.length > 0) posts._lastDoc = snap.docs[snap.docs.length - 1];
   return posts;
+};
 
+// Fetch posts newer than a given timestamp (for pull-to-refresh)
+export const getNewerFeedPosts = async (sinceTimestamp, limitCount = 20) => {
+  if (!sinceTimestamp) return [];
+  const q = query(
+    collection(db, 'posts'),
+    where('status', '==', 'published'),
+    where('createdAt', '>', sinceTimestamp),
+    orderBy('createdAt', 'desc'),
+    limit(limitCount)
+  );
+  const snap = await getDocs(q);
+  const posts = snap.docs.map(d => ({ id: d.id, ...d.data(), _doc: d }));
+  await _hydrateAuthors(posts);
+  return posts;
 };
 
 export const getUserPosts = async (uid, limitCount = 20) => {
@@ -301,15 +370,27 @@ export const getComments = async (postId, limitCount = 20) => {
   return comments;
 };
 
-export const addComment = async (postId, authorId, content) => {
-  const ref = await addDoc(collection(db, 'posts', postId, 'comments'), {
+export const addComment = async (postId, authorId, content, media = null) => {
+  const data = {
     authorId,
-    content,
+    content: content || '',
     likeCount: 0,
     createdAt: serverTimestamp(),
-  });
-  await updateDoc(doc(db, 'posts', postId), { commentCount: increment(1) });
-  return ref.id;
+  };
+  // media: { type: 'gif' | 'sticker' | 'clip' | 'image' | 'video', url, thumbnailUrl? }
+  if (media?.url) {
+    data.mediaUrl = media.url;
+    data.mediaType = media.type || 'image';
+    if (media.thumbnailUrl) data.thumbnailUrl = media.thumbnailUrl;
+  }
+  // Pre-generate the doc ref so we can batch the comment write + counter
+  // bump in a single round-trip instead of two sequential writes.
+  const commentRef = doc(collection(db, 'posts', postId, 'comments'));
+  const batch = writeBatch(db);
+  batch.set(commentRef, data);
+  batch.update(doc(db, 'posts', postId), { commentCount: increment(1) });
+  await batch.commit();
+  return commentRef.id;
 };
 
 // ═══════════════════════════════════════════
@@ -319,20 +400,44 @@ export const addComment = async (postId, authorId, content) => {
 export const toggleLike = async (postId, userId) => {
   const likeRef = doc(db, 'posts', postId, 'likes', userId);
   const postRef = doc(db, 'posts', postId);
-  return runTransaction(db, async (tx) => {
-    const likeSnap = await tx.get(likeRef);
-    const postSnap = await tx.get(postRef);
-    const currentCount = postSnap.exists() ? (postSnap.data().likeCount || 0) : 0;
+
+  try {
+    const likeSnap = await getDoc(likeRef);
+    // Batch the like doc + post counter into a single network round-trip.
+    // This is the highest-frequency write in the app, so the savings compound.
+    const batch = writeBatch(db);
     if (likeSnap.exists()) {
-      tx.delete(likeRef);
-      tx.update(postRef, { likeCount: Math.max(0, currentCount - 1) });
+      batch.delete(likeRef);
+      batch.update(postRef, { likeCount: increment(-1) });
+      await batch.commit();
       return false;
     } else {
-      tx.set(likeRef, { userId, createdAt: serverTimestamp() });
-      // onNewLike Cloud Function handles likeCount increment + notification
+      batch.set(likeRef, { userId, createdAt: serverTimestamp() });
+      batch.update(postRef, { likeCount: increment(1) });
+      await batch.commit();
       return true;
     }
-  });
+  } catch (error) {
+    console.error('Error toggling like:', error);
+    throw error;
+  }
+};
+
+// Get list of users who liked a post
+export const getPostLikes = async (postId, limitCount = 50) => {
+  const q = query(
+    collection(db, 'posts', postId, 'likes'),
+    orderBy('createdAt', 'desc'),
+    limit(limitCount)
+  );
+  const snap = await getDocs(q);
+  const users = [];
+  for (const d of snap.docs) {
+    const userId = d.id; // document ID is the userId
+    const user = await getUser(userId);
+    if (user) users.push(user);
+  }
+  return users;
 };
 
 export const isPostLiked = async (postId, userId) => {
@@ -397,7 +502,12 @@ export const repost = async (userId, originalPostId) => {
   );
   if (!existing.empty) throw new Error('Already reposted');
 
-  await addDoc(collection(db, 'posts'), {
+  // Batch the repost insert + share count + author postCount in one round-trip,
+  // and use increment() so we don't pay for the two extra read-before-write
+  // round-trips that the previous version did.
+  const repostRef = doc(collection(db, 'posts'));
+  const batch = writeBatch(db);
+  batch.set(repostRef, {
     authorId: userId,
     type: 'repost',
     repostOf: originalPostId,
@@ -414,14 +524,9 @@ export const repost = async (userId, originalPostId) => {
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
-
-  const origSnap = await getDoc(doc(db, 'posts', originalPostId));
-  const currentShare = origSnap.exists() ? (origSnap.data().shareCount || 0) : 0;
-  await updateDoc(doc(db, 'posts', originalPostId), { shareCount: currentShare + 1 });
-
-  const userSnap = await getDoc(doc(db, 'users', userId));
-  const currentPosts = userSnap.exists() ? (userSnap.data().postCount || 0) : 0;
-  await updateDoc(doc(db, 'users', userId), { postCount: currentPosts + 1 });
+  batch.update(doc(db, 'posts', originalPostId), { shareCount: increment(1) });
+  batch.update(doc(db, 'users', userId), { postCount: increment(1) });
+  await batch.commit();
 };
 
 export const undoRepost = async (userId, originalPostId) => {
@@ -429,15 +534,15 @@ export const undoRepost = async (userId, originalPostId) => {
     query(collection(db, 'posts'), where('authorId', '==', userId), where('repostOf', '==', originalPostId), where('type', '==', 'repost'), limit(1))
   );
   if (existing.empty) return;
-  await deleteDoc(existing.docs[0].ref);
 
-  const origSnap = await getDoc(doc(db, 'posts', originalPostId));
-  const currentShare = origSnap.exists() ? (origSnap.data().shareCount || 0) : 0;
-  await updateDoc(doc(db, 'posts', originalPostId), { shareCount: Math.max(0, currentShare - 1) });
-
-  const userSnap = await getDoc(doc(db, 'users', userId));
-  const currentPosts = userSnap.exists() ? (userSnap.data().postCount || 0) : 0;
-  await updateDoc(doc(db, 'users', userId), { postCount: Math.max(0, currentPosts - 1) });
+  // Batch the delete + both counter decrements (negative increment is safe;
+  // the floor-at-zero behaviour is enforced by the security rules / clients
+  // checking against 0 — we trade a tiny correctness edge for fewer reads).
+  const batch = writeBatch(db);
+  batch.delete(existing.docs[0].ref);
+  batch.update(doc(db, 'posts', originalPostId), { shareCount: increment(-1) });
+  batch.update(doc(db, 'users', userId), { postCount: increment(-1) });
+  await batch.commit();
 };
 
 export const isReposted = async (userId, originalPostId) => {
@@ -449,7 +554,10 @@ export const isReposted = async (userId, originalPostId) => {
 };
 
 export const createQuotePost = async (userId, originalPostId, { content, mediaUrls = [], hashtags = [] }) => {
-  const postRef = await addDoc(collection(db, 'posts'), {
+  // Batch the new post + share count + author postCount in one round-trip.
+  const postRef = doc(collection(db, 'posts'));
+  const batch = writeBatch(db);
+  batch.set(postRef, {
     authorId: userId,
     type: 'quote',
     quotedPostId: originalPostId,
@@ -466,9 +574,9 @@ export const createQuotePost = async (userId, originalPostId, { content, mediaUr
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
-
-  await updateDoc(doc(db, 'posts', originalPostId), { shareCount: increment(1) });
-  await updateDoc(doc(db, 'users', userId), { postCount: increment(1) });
+  batch.update(doc(db, 'posts', originalPostId), { shareCount: increment(1) });
+  batch.update(doc(db, 'users', userId), { postCount: increment(1) });
+  await batch.commit();
   return postRef.id;
 };
 
@@ -720,6 +828,128 @@ export const awardVP = async (userId, amount, reason = '') => {
   await updateDoc(doc(db, 'wallets', userId), {
     vp: increment(amount),
   }).catch(() => {});
+};
+
+// ────────────────────────────────────────────────────────────
+// WATCH-TO-EARN AD QUEST STATE
+// ────────────────────────────────────────────────────────────
+// Persistent counters for the PropellerAds Direct Link daily quest.
+// Stored in users/{uid}/private/adQuest so it survives device wipes
+// but never bloats the public user doc.
+//
+// Daily reward: ADS_CONFIG.watchToEarnVp per ad
+// Daily bonus: ADS_CONFIG.dailyAdBonusVp once per day after N ads
+// Week / month streaks: triggered by getAdQuestState helpers below
+
+const adQuestRef = (uid) => doc(db, 'users', uid, 'private', 'adQuest');
+
+const todayKey = () => {
+  const d = new Date();
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+};
+
+const daysBetween = (a, b) => {
+  // a, b are 'YYYY-MM-DD' UTC strings — returns whole-day diff (b - a).
+  const da = new Date(a + 'T00:00:00Z').getTime();
+  const db_ = new Date(b + 'T00:00:00Z').getTime();
+  return Math.round((db_ - da) / 86400000);
+};
+
+export const getAdQuestState = async (uid) => {
+  if (!uid) return null;
+  const snap = await getDoc(adQuestRef(uid));
+  return snap.exists() ? snap.data() : {
+    todayDate: null,
+    todayCount: 0,
+    todayBonusClaimed: false,
+    weekStreak: 0,         // consecutive days with ≥1 ad watched
+    monthStreak: 0,
+    lastWatchDate: null,
+  };
+};
+
+/**
+ * Records a single completed ad watch — awards base VP, advances streaks,
+ * and (if appropriate) awards the daily-bonus / week / month milestones.
+ *
+ * Returns the credited VP totals so the UI can flash a confirmation.
+ */
+export const recordAdWatch = async (uid) => {
+  if (!uid) return { creditedVp: 0 };
+
+  const state = await getAdQuestState(uid);
+  const today = todayKey();
+
+  // ── Roll over the day if needed ──
+  let { todayDate, todayCount, todayBonusClaimed, weekStreak, monthStreak, lastWatchDate } = state;
+  if (todayDate !== today) {
+    // First ad of a new day — figure out streak continuation.
+    if (lastWatchDate) {
+      const gap = daysBetween(lastWatchDate, today);
+      if (gap === 1) {
+        weekStreak += 1;
+        monthStreak += 1;
+      } else if (gap > 1) {
+        // Missed a day → streaks reset (this watch starts a fresh run).
+        weekStreak = 1;
+        monthStreak = 1;
+      }
+    } else {
+      weekStreak = 1;
+      monthStreak = 1;
+    }
+    todayDate = today;
+    todayCount = 0;
+    todayBonusClaimed = false;
+  }
+
+  todayCount += 1;
+  lastWatchDate = today;
+
+  let creditedVp = ADS_CONFIG.watchToEarnVp;
+
+  // Daily bonus
+  if (!todayBonusClaimed && todayCount >= ADS_CONFIG.dailyAdBonusThreshold) {
+    creditedVp += ADS_CONFIG.dailyAdBonusVp;
+    todayBonusClaimed = true;
+  }
+
+  // Week milestone (every full 7-day streak)
+  let weekBonusHit = false;
+  if (weekStreak > 0 && weekStreak % 7 === 0 && todayCount === 1) {
+    creditedVp += 1000; // 7-day perfect-week bonus
+    weekBonusHit = true;
+  }
+
+  // Month milestone (every full 30-day streak)
+  let monthBonusHit = false;
+  if (monthStreak > 0 && monthStreak % 30 === 0 && todayCount === 1) {
+    creditedVp += 5000; // 30-day perfect-month bonus
+    monthBonusHit = true;
+  }
+
+  // Persist quest state + wallet VP in a single batch.
+  const batch = writeBatch(db);
+  batch.set(adQuestRef(uid), {
+    todayDate, todayCount, todayBonusClaimed,
+    weekStreak, monthStreak, lastWatchDate,
+    updatedAt: serverTimestamp(),
+  }, { merge: true });
+  batch.update(doc(db, 'wallets', uid), {
+    vp: increment(creditedVp),
+    totalEarned: increment(creditedVp),
+  });
+  await batch.commit();
+
+  return {
+    creditedVp,
+    todayCount,
+    weekStreak,
+    monthStreak,
+    dailyBonusJustHit: todayBonusClaimed && todayCount === ADS_CONFIG.dailyAdBonusThreshold,
+    weekBonusHit,
+    monthBonusHit,
+  };
 };
 
 // ═══════════════════════════════════════════
@@ -1943,24 +2173,47 @@ export const getLeaderboard = async (boardId = 'players', limitCount = 50) => {
 
 // ═══════════════════════════════════════════
 // FILE UPLOADS
+//
+// All image uploads are compressed on the user's device before they hit
+// Firebase Storage. A typical 4 MB phone photo becomes:
+//   - avatar  → ~80 KB  (512×512 JPEG)
+//   - post    → ~250 KB (1600 px JPEG)
+//   - chat    → ~180 KB (1280 px JPEG)
+// This keeps Storage costs nearly flat as the user base grows.
 // ═══════════════════════════════════════════
 
-export const uploadFile = async (path, file) => {
-  const storageRef = ref(storage, path);
-  await uploadBytes(storageRef, file);
+export const uploadFile = async (path, file, { preset = 'post', compress = true } = {}) => {
+  const blob = compress && file?.type?.startsWith('image/')
+    ? await compressMedia(file, 'free', preset)
+    : file;
+  // Use the (possibly renamed) compressed file's name in the storage path so
+  // we don't accidentally upload `photo.HEIC` after compressing to JPEG.
+  const finalPath = path.includes('${name}') ? path.replace('${name}', blob.name) : path;
+  const storageRef = ref(storage, finalPath);
+  await uploadBytes(storageRef, blob);
   return getDownloadURL(storageRef);
 };
 
 export const uploadAvatar = async (uid, file) => {
-  return uploadFile(`users/${uid}/avatar/${file.name}`, file);
+  // Compress to a 512×512 JPEG before upload — phone cameras typically
+  // produce 12 MP HEIC files which would otherwise burn ~4 MB per avatar.
+  const compressed = file?.type?.startsWith('image/')
+    ? await compressMedia(file, 'free', 'avatar')
+    : file;
+  return uploadFile(`users/${uid}/avatar/${Date.now()}_${compressed.name}`, compressed, { compress: false });
 };
 
 export const uploadBanner = async (uid, file) => {
-  return uploadFile(`users/${uid}/banner/${file.name}`, file);
+  const compressed = file?.type?.startsWith('image/')
+    ? await compressMedia(file, 'free', 'background')
+    : file;
+  return uploadFile(`users/${uid}/banner/${Date.now()}_${compressed.name}`, compressed, { compress: false });
 };
 
 export const uploadPostMedia = async (postId, file) => {
-  return uploadFile(`posts/${postId}/${file.name}`, file);
+  // Post photos are compressed via the `post` preset (1600 px max, q=0.82).
+  // Videos are passed through with the tier size cap enforced by compressMedia.
+  return uploadFile(`posts/${postId}/${Date.now()}_${file.name}`, file, { preset: 'post' });
 };
 
 // ═══════════════════════════════════════════
@@ -2084,4 +2337,99 @@ export const distributeWinRewards = async (winnerId, teamId, squadId, xpGained) 
       leaderboardPoints: increment(xpGained) 
     });
   });
+};
+
+// ═══════════════════════════════════════════
+// NEWS BOT ACCOUNTS
+// ═══════════════════════════════════════════
+
+export const ensureNewsBotAccount = async (botConfig) => {
+  const userRef = doc(db, 'users', botConfig.id);
+  const snap = await getDoc(userRef);
+  if (!snap.exists()) {
+    await setDoc(userRef, {
+      username: botConfig.username,
+      displayName: botConfig.displayName,
+      bio: botConfig.bio || '',
+      avatar: botConfig.avatar || null,
+      banner: botConfig.banner || null,
+      website: botConfig.website || '',
+      accountType: 'news_bot',
+      isVerified: true,
+      isOnboarded: true,
+      followerCount: 0,
+      followingCount: 0,
+      postCount: 0,
+      level: 1,
+      totalXP: 0,
+      tier: 'free',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  }
+};
+
+export const syncRSSPost = async (botUserId, rssItem, postId) => {
+  const postRef = doc(db, 'posts', postId);
+  const snap = await getDoc(postRef);
+  if (snap.exists()) return false; // Already synced
+
+  const description = (rssItem.description || '')
+    .replace(/<[^>]*>/g, '')
+    .slice(0, 280);
+
+  await setDoc(postRef, {
+    authorId: botUserId,
+    content: rssItem.title || '',
+    type: 'text',
+    mediaUrls: rssItem.thumbnail ? [rssItem.thumbnail] : [],
+    hashtags: [],
+    likeCount: 0,
+    commentCount: 0,
+    shareCount: 0,
+    saveCount: 0,
+    viewCount: 0,
+    status: 'published',
+    rankScore: 0,
+    sourceUrl: rssItem.link || '',
+    isNewsPost: true,
+    linkPreview: {
+      url: rssItem.link || '',
+      title: rssItem.title || '',
+      description: description,
+      image: rssItem.thumbnail || null,
+    },
+    createdAt: rssItem.pubDate ? new Date(rssItem.pubDate) : new Date(),
+    updatedAt: new Date(),
+  });
+
+  // Increment post count on bot user
+  const userRef = doc(db, 'users', botUserId);
+  await updateDoc(userRef, { postCount: increment(1) }).catch(() => {});
+  return true;
+};
+
+// ═══════════════════════════════════════════
+// ADS (Firestore)
+// ═══════════════════════════════════════════
+
+export const getActiveFirestoreAds = async (limitCount = 5) => {
+  try {
+    const q = query(
+      collection(db, 'ads'),
+      where('status', '==', 'active'),
+      orderBy('createdAt', 'desc'),
+      limit(limitCount)
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map(d => ({
+      id: d.id,
+      ...d.data(),
+      isAd: true,
+      isFirestoreAd: true,
+    }));
+  } catch (err) {
+    console.error('Error fetching Firestore ads:', error);
+    return [];
+  }
 };

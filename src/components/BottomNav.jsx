@@ -6,8 +6,8 @@ import { useNotifications } from '../context/NotificationContext';
 const tabs = [
   { path: '/', icon: 'home', label: 'Home' },
   { path: '/explore', icon: 'explore', label: 'Explore' },
+  { path: '/shorts', icon: 'slow_motion_video', label: 'Shorts' },
   { path: '/messages', icon: 'chat_bubble', label: 'Chat' },
-  { path: '/squads', icon: 'groups', label: 'Squads' },
   { path: '/profile', icon: 'person', label: 'Profile' },
 ];
 

@@ -20,7 +20,7 @@ const SECTIONS = [
     title: 'The VERGR Economy',
     content: 'VERGR runs on three currencies. Coins are bought with real money and used to spend. Gems are earned when people spend coins ON YOU — these can be cashed out. VP (VERGR Points) are earned through activity and unlock levels, perks, and discounts.',
     items: [
-      { label: 'Coins (●)', value: 'Bought with real money. 1 coin = €0.01. Spend on tips, tournaments, services, boosts.' },
+      { label: 'Coins (●)', value: 'Bought with real money. 1 coin = €0.01. Spend on tips, tournaments, and boosts.' },
       { label: 'Gems (◆)', value: 'Earned when someone spends coins on you. Cashable. 1 gem = €0.01. You keep 70-85% depending on your VP level.' },
       { label: 'VP (★)', value: 'Earned through activity. Levels up your profile, unlocks perks, lowers your commission rate.' },
     ],
@@ -31,14 +31,13 @@ const SECTIONS = [
     icon: 'diamond',
     color: '#4DFFD4',
     title: 'How to Earn Real Money',
-    content: 'There are three main ways to earn gems (cashable money) on VERGR:',
+    content: 'There are two main ways to earn gems (cashable money) on VERGR:',
     items: [
-      { label: 'Offer services', value: 'Coaching, editing, design, moderation — clients pay coins, you receive gems.' },
       { label: 'Win tournaments', value: 'Entry fees form the prize pool. Winners receive gems.' },
       { label: 'Receive tips', value: 'When someone tips you with coins, you get gems.' },
       { label: 'Cash out', value: 'Minimum 1000 gems (€10). Paid via Wise/PayPal. ~3% processor fee.' },
     ],
-    extra: 'A coach charging 2000 coins/session at Rookie level keeps 1400 gems (€14). Five sessions/week = €280/month. At Mythic level: 1700 gems (€17) per session = €340/month.',
+    extra: 'VP (earned from quests, phone-add, and referrals) lowers your commission rate — at Mythic you keep 85% of every coin converted to gems instead of 70%.',
   },
   {
     id: 'coins',

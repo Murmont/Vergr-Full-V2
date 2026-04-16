@@ -3,12 +3,16 @@ import { useNavigate } from 'react-router-dom';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { doc, updateDoc } from 'firebase/firestore';
 import { auth, storage, db } from '../../firebase/config';
+import { compressMedia } from '../../utils/mediaCompression';
 import { SiTwitch, SiDiscord, SiYoutube, SiSteam } from 'react-icons/si'; // Professional brand logos
 import TopBar from '../../components/TopBar';
 import Icon from '../../components/Icon';
+import AddPhoneModal from '../../components/AddPhoneModal';
 
 export default function ProfileSetupScreen() {
   const [bio, setBio] = useState('');
+  const [phoneModalOpen, setPhoneModalOpen] = useState(false);
+  const [phoneSaved, setPhoneSaved] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState(null);
   const fileInputRef = useRef(null);
@@ -25,11 +29,15 @@ export default function ProfileSetupScreen() {
     setUploading(true);
 
     try {
+      // Compress on-device before upload — 4 MB phone photos become ~80 KB
+      // 512×512 JPEGs, which keeps Storage costs flat as users grow.
+      const compressed = await compressMedia(file, 'free', 'avatar');
+
       // Path matches your strict storage rules: users/{userId}/avatar/{fileName}
-      const storagePath = `users/${auth.currentUser.uid}/avatar/${Date.now()}_${file.name}`;
+      const storagePath = `users/${auth.currentUser.uid}/avatar/${Date.now()}_${compressed.name}`;
       const storageRef = ref(storage, storagePath);
-      
-      const snapshot = await uploadBytes(storageRef, file);
+
+      const snapshot = await uploadBytes(storageRef, compressed);
       const downloadURL = await getDownloadURL(snapshot.ref);
 
       // Update Firestore in the 'vgrdb' database
@@ -93,6 +101,44 @@ export default function ProfileSetupScreen() {
           />
           <p className="text-text-muted text-xs text-right mt-1">{bio.length}/150</p>
         </div>
+
+        {/* Optional phone — earns 1000 VP once saved, lets the user invite
+            contacts and auto-match the ones already on VERGR. Fully skippable;
+            the New Chat screen's 3-dot menu and Earn tab also offer this later. */}
+        <div className="mb-6">
+          <label className="text-text-secondary text-sm mb-2 block">
+            Phone number <span className="text-text-muted">(optional — earn +1000 VP)</span>
+          </label>
+          {phoneSaved ? (
+            <div className="flex items-center gap-2 bg-brand-cyan/10 border border-brand-cyan/30 rounded-2xl px-4 py-3">
+              <Icon name="check_circle" size={18} className="text-brand-cyan" />
+              <p className="text-brand-cyan text-sm font-bold">Phone saved — +1000 VP added to your wallet.</p>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setPhoneModalOpen(true)}
+              className="w-full flex items-center gap-3 p-3 rounded-2xl bg-surface-2 border border-white/[0.06] hover:border-brand-cyan/30 transition-all"
+            >
+              <div className="w-10 h-10 rounded-full bg-brand-cyan/15 text-brand-cyan flex items-center justify-center shrink-0">
+                <Icon name="phone" size={18} />
+              </div>
+              <div className="flex-1 text-left">
+                <p className="text-sm font-bold text-white">Add phone number</p>
+                <p className="text-[11px] text-text-muted">Pick your country, type your number, earn +1000 VP.</p>
+              </div>
+              <Icon name="chevron_right" size={20} className="text-text-muted" />
+            </button>
+          )}
+        </div>
+
+        {phoneModalOpen && (
+          <AddPhoneModal
+            rewardAmount={1000}
+            onClose={() => setPhoneModalOpen(false)}
+            onSaved={() => { setPhoneModalOpen(false); setPhoneSaved(true); }}
+          />
+        )}
 
         <h3 className="text-text-primary font-semibold mb-3">Link Gaming Accounts</h3>
         <div className="space-y-3">

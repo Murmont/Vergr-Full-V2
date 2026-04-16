@@ -133,8 +133,6 @@ export default function WalletScreen() {
       case 'tournament_prize': case 'tournament_win': return { icon: 'emoji_events', color: 'text-brand-gold', bg: 'bg-brand-gold/10' };
       case 'tournament_refund': return { icon: 'replay', color: 'text-brand-cyan', bg: 'bg-brand-cyan/10' };
       case 'mod_payout': return { icon: 'shield', color: 'text-brand-cyan', bg: 'bg-brand-cyan/10' };
-      case 'service_payment': return { icon: 'work', color: 'text-brand-violet', bg: 'bg-brand-violet/10' };
-      case 'service_earned': return { icon: 'diamond', color: 'text-brand-cyan', bg: 'bg-brand-cyan/10' };
       case 'squad_contribution': return { icon: 'groups', color: 'text-brand-violet', bg: 'bg-brand-violet/10' };
       case 'boost': return { icon: 'trending_up', color: 'text-brand-pink', bg: 'bg-brand-pink/10' };
       case 'membership': return { icon: 'card_membership', color: 'text-brand-pink', bg: 'bg-brand-pink/10' };
@@ -157,7 +155,7 @@ export default function WalletScreen() {
           <span className="text-3xl font-black font-dmmono text-text-primary">{(wallet?.balance || 0).toLocaleString()}</span>
           <span className="text-text-muted text-xs font-dmmono">≈ €{((wallet?.balance || 0) * 0.01).toFixed(2)}</span>
         </div>
-        <p className="text-text-muted text-[10px] mt-1">Buy coins to spend on tips, tournaments, services & boosts</p>
+        <p className="text-text-muted text-[10px] mt-1">Buy coins to spend on tips, tournaments & boosts</p>
       </div>
 
       {/* Gems + VP row */}
@@ -172,15 +170,18 @@ export default function WalletScreen() {
           <p className="text-text-muted text-[9px] mt-0.5">Cashable · €{((wallet?.gems || 0) * 0.01).toFixed(2)}</p>
         </div>
 
-        {/* VP */}
-        <div className="flex-1 p-4 rounded-2xl bg-surface-1 border border-white/[0.06]">
+        {/* VP — clickable to prestige levels */}
+        <button
+          onClick={() => navigate('/prestige')}
+          className="flex-1 p-4 rounded-2xl bg-surface-1 border border-white/[0.06] text-left hover:bg-surface-2/50 transition-colors"
+        >
           <div className="flex items-center gap-1.5 mb-1">
             <Icon name="star" size={14} className="text-brand-violet" />
             <p className="text-text-muted text-[10px] uppercase tracking-wider font-semibold">VP</p>
           </div>
           <p className="text-xl font-black font-dmmono text-text-primary">{(wallet?.vp || 0).toLocaleString()}</p>
           <VPLevelBadge vp={wallet?.vp || 0} size="xs" />
-        </div>
+        </button>
       </div>
     </div>
   );
@@ -190,8 +191,8 @@ export default function WalletScreen() {
       {[
         { route: '/buy-coins', icon: 'add_circle', color: 'text-brand-gold', label: 'Buy Coins' },
         { route: '/earn', icon: 'emoji_events', color: 'text-brand-cyan', label: 'Earn' },
-        { route: '/services', icon: 'work', color: 'text-brand-violet', label: 'Services' },
-        { route: '/request-payout', icon: 'savings', color: 'text-brand-pink', label: 'Cash Out' },
+        { route: '/earn/refer', icon: 'person_add', color: 'text-brand-pink', label: 'Refer' },
+        { route: '/request-payout', icon: 'savings', color: 'text-brand-violet', label: 'Cash Out' },
       ].map(item => (
         <motion.button
           key={item.route}
@@ -304,7 +305,7 @@ export default function WalletScreen() {
         {renderBalanceCard()}
 
         <InfoTooltip id="wallet_intro" icon="school" color="#4DFFD4" title="How the VERGR economy works">
-          <strong>Coins</strong> are bought with real money — spend on tips, services, tournaments, and boosts.{' '}
+          <strong>Coins</strong> are bought with real money — spend on tips, tournaments, and boosts.{' '}
           <strong>Gems</strong> are earned when people spend coins on you — cash these out.{' '}
           <strong>VP</strong> levels up your profile, lowers your commission, and unlocks perks.
         </InfoTooltip>

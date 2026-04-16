@@ -10,9 +10,17 @@ import TopBar from '../../components/TopBar';
 import CoinDisplay from '../../components/CoinDisplay';
 import Icon from '../../components/Icon';
 import InfoTooltip from '../../components/InfoTooltip';
+import WatchToEarnQuest from '../../components/WatchToEarnQuest';
 import { useLayout } from '../../context/LayoutContext';
 import useResponsive from '../../hooks/useResponsive';
 
+// Watch-to-Earn lives ONLY on the Earn screen as a dedicated component
+// (see <WatchToEarnQuest /> below). It is deliberately NOT added as a
+// quest card here, because quest cards render on /earn and AdSense
+// policy forbids mixing incentivised ad prompts with AdSense inventory
+// — if the same screen ever showed an AdSense unit, the account could
+// be banned. Keeping the two surfaces separate (AdSense everywhere
+// except /earn, Watch-to-Earn only on /earn) is the safe split.
 const QUEST_DEFS = {
   daily: [
     { id: 'daily_post', title: 'Create a Post', description: 'Share something with the community', reward: 15, currency: 'vp', target: 1 },
@@ -27,7 +35,15 @@ const QUEST_DEFS = {
     { id: 'creator_content', title: 'Creator Content', description: 'Post 10 times with 5+ likes and 5+ comments each', reward: 100, currency: 'vp', target: 10, oneTime: true },
     { id: 'first_squad', title: 'Join a Squad', description: 'Join or create your first squad', reward: 50, currency: 'vp', target: 1, oneTime: true },
     { id: 'first_tournament', title: 'Enter a Tournament', description: 'Compete in your first tournament', reward: 100, currency: 'vp', target: 1, oneTime: true },
-    { id: 'refer_friend', title: 'Refer a Friend', description: 'Both need paid sub + friend must have bought coins', reward: 25, currency: 'coins', bonusVP: 500, target: 1, oneTime: true, requiresFriend: true },
+    // Refer-a-Friend: reward is 3000 VP to the referrer, 5000 VP to the
+    // invitee. Unlocks when the invitee (a) signed up via the referrer's
+    // link, (b) added their phone number, and (c) either joined a squad or
+    // subscribed to Lite/Pro. See claimQuestReward in functions/index.js.
+    { id: 'refer_friend', title: 'Refer a Friend', description: 'Friend joins via your link, adds phone, and joins a squad or subscribes — you earn 3000 VP, they earn 5000 VP', reward: 3000, currency: 'vp', target: 1, requiresFriend: true, external: true, externalRoute: '/earn/refer', externalLabel: 'Manage' },
+    // Rewarded via the dedicated `savePhoneNumber` callable (functions/index.js).
+    // The quest-claim doc key is `${uid}_add_phone` so the grid below can
+    // detect it as already-claimed just like the other oneTime quests.
+    { id: 'add_phone', title: 'Add Phone Number', description: 'Unlocks contact invites — open New Chat → ⋮ → Add phone number', reward: 1000, currency: 'vp', target: 1, oneTime: true, external: true, externalRoute: '/messages/new', externalLabel: 'Add' },
   ],
 };
 
@@ -137,9 +153,9 @@ export default function EarnCoinsScreen() {
   const EARN_METHODS = [
     { icon: 'star', title: 'Daily Quests', desc: 'Complete tasks for VP', reward: '15-30 VP/day', color: 'text-brand-violet', action: () => setActiveTab('daily') },
     { icon: 'login', title: '5-Day Streak', desc: 'Log in 5 days straight', reward: '5 coins + 50 VP', color: 'text-brand-gold', action: () => navigate('/') },
-    { icon: 'diamond', title: 'Offer Services', desc: 'Earn gems from clients', reward: 'Gems (cashable)', color: 'text-brand-cyan', action: () => navigate('/services') },
+    { icon: 'phone', title: 'Add Phone Number', desc: 'Unlock contact invites', reward: '1000 VP', color: 'text-brand-cyan', action: () => navigate('/messages/new') },
     { icon: 'emoji_events', title: 'Win Tournaments', desc: 'Win gems from prize pools', reward: 'Gems + VP', color: 'text-brand-ember', action: () => navigate('/tournaments') },
-    { icon: 'person_add', title: 'Refer Friends', desc: 'Both need paid sub + coins', reward: '25 coins + 500 VP', color: 'text-brand-pink', action: () => setActiveTab('special') },
+    { icon: 'person_add', title: 'Refer Friends', desc: 'Invite a friend who sets up properly', reward: '3000 VP (+5000 VP for them)', color: 'text-brand-pink', action: () => setActiveTab('special') },
     { icon: 'trending_up', title: 'Level Up', desc: 'Higher VP = lower fees', reward: 'Up to 15% discount', color: 'text-brand-gold', action: () => navigate('/settings/how-it-works') },
   ];
 
@@ -180,14 +196,17 @@ export default function EarnCoinsScreen() {
               <p className="text-text-secondary text-[9px]">Coins (spendable)</p>
             </div>
           </div>
-          <p className="text-text-primary text-[10px] mt-3 text-center">Quests earn VP · Services & tournaments earn gems · Streaks & referrals earn coins</p>
+          <p className="text-text-primary text-[10px] mt-3 text-center">Quests earn VP · Tournaments earn gems · Referrals earn VP for both of you</p>
         </div>
       </div>
 
+      {/* Watch-to-Earn daily quest (PropellerAds Direct Link) */}
+      <WatchToEarnQuest />
+
       <div className="mx-4 lg:mx-6 mt-3">
         <InfoTooltip id="earn_intro" icon="diamond" color="#4DFFD4" title="Earning real money on VERGR">
-          Offer services (coaching, editing, design) and win tournaments to earn <strong>gems</strong> — these can be cashed out. 
-          Complete quests to earn <strong>VP</strong> — this levels up your profile and lowers your commission rate, meaning you keep more from every sale.
+          Win tournaments to earn <strong>gems</strong> — these can be cashed out.
+          Complete quests, refer friends, and level up to earn <strong>VP</strong> — this levels up your profile and lowers your commission rate, meaning you keep more from every cash-out.
         </InfoTooltip>
       </div>
 
@@ -335,7 +354,14 @@ export default function EarnCoinsScreen() {
                       </div>
                       <div className="text-right shrink-0">
                         <p className={`text-sm font-dmmono font-bold ${quest.currency === "coins" ? "text-brand-gold" : "text-brand-violet"}`}>{quest.currency === "coins" ? "●" : "★"} {quest.reward} {quest.currency === "coins" ? "" : "VP"}</p>
-                        {completed && !claimed && (
+                        {quest.external && !claimed && (
+                          <button
+                            onClick={() => navigate(quest.externalRoute || '/messages/new')}
+                            className="mt-2 px-4 py-1.5 rounded-full bg-brand-cyan text-bg-dark text-xs font-bold hover:brightness-110 active:scale-95 transition-all">
+                            {quest.externalLabel || 'Open'}
+                          </button>
+                        )}
+                        {!quest.external && completed && !claimed && (
                           <button
                             onClick={() => handleClaim(quest)}
                             disabled={claiming === quest.id}

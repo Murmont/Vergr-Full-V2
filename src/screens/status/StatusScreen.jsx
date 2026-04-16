@@ -369,10 +369,27 @@ function CreateStatusModal({ onClose, currentUser, profile, onCreated }) {
       if (mediaFile) {
         const { ref, uploadBytes, getDownloadURL } = await import('firebase/storage');
         const { storage } = await import('../../firebase/config');
-        const ext = mediaFile.name.split('.').pop();
+
+        // Compress images + videos before upload to slash storage / egress.
+        // Videos use the MediaRecorder-based Shorts compressor (real-time, small output).
+        let uploadFile = mediaFile;
+        const tier = profile?.tier || 'free';
+        if (mediaFile.type.startsWith('image/')) {
+          try {
+            const { compressImage } = await import('../../utils/Mediacompression');
+            uploadFile = await compressImage(mediaFile, 'post');
+          } catch { /* fall through with original */ }
+        } else if (mediaFile.type.startsWith('video/')) {
+          try {
+            const { compressVideo } = await import('../../utils/Mediacompression');
+            uploadFile = await compressVideo(mediaFile, tier);
+          } catch { /* fall through with original */ }
+        }
+
+        const ext = (uploadFile.name || mediaFile.name).split('.').pop();
         const path = `statuses/${currentUser.uid}/${Date.now()}.${ext}`;
         const storageRef = ref(storage, path);
-        await uploadBytes(storageRef, mediaFile);
+        await uploadBytes(storageRef, uploadFile);
         mediaUrl = await getDownloadURL(storageRef);
         mediaType = mediaFile.type.startsWith('video') ? 'video' : 'image';
       }

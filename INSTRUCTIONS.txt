@@ -1,0 +1,38 @@
+VERGR v2 — Case-Sensitivity Build Fixes
+=========================================
+
+IMPORTANT: Windows is case-insensitive, so you can't just paste these files
+on top of the old ones — Windows will think they're the same file.
+You MUST delete the OLD-cased files FIRST, then paste the new ones.
+
+STEP 1 — DELETE these old files from your local repo:
+------------------------------------------------------
+src\hooks\UsePresence.js
+src\hooks\UseMessages.js
+src\hooks\UseTyping.js
+src\components\Mediapanel.jsx
+src\components\Linkpreview.jsx
+src\components\Messagecontextmenu.jsx
+src\components\Upgrademodal.jsx
+src\utils\Mediacompression.js
+src\utils\Klipyapi.js
+src\utils\Chatbackgrounds.js
+src\utils\Tiersystem.js
+src\utils\chatbackup.js        (note: lowercase 'b' in backup)
+src\utils\localdb.js            (note: lowercase 'd' in db)
+src\screens\settings\Backupsettingsscreen.jsx
+
+STEP 2 — Copy the contents of the "src" folder from this zip into your repo's "src" folder.
+This will place the correctly-cased files:
+  usePresence.js, useMessages.js, useTyping.js,
+  MediaPanel.jsx, LinkPreview.jsx, MessageContextMenu.jsx, UpgradeModal.jsx,
+  mediaCompression.js, klipyApi.js, chatBackgrounds.js, tierSystem.js,
+  chatBackup.js, localDb.js, BackupSettingsScreen.jsx
+
+It will also replace these two files with fixed imports:
+  src\screens\create\CreateClipPostScreen.jsx
+  src\screens\create\CreatePhotoPostScreen.jsx
+
+STEP 3 — In GitHub Desktop, you should see the renames + edits as changes. Commit and push.
+
+STEP 4 — Run "npm run build" to verify it builds cleanly.

@@ -1,5 +1,13 @@
-// Vergr Service Worker v2 — fixed to not break Firebase
-const CACHE_NAME = 'vergr-v2';
+// Vergr Service Worker v3 — PWA cache only
+// ─────────────────────────────────────────────────────────
+// Intentionally NO third-party ad service worker here.
+// Monetag's In-Page Push format spawns corner popups that look spammy
+// and hurt app credibility, and AdSense explicitly forbids running a
+// competing ad network's SW on the same origin as AdSense ads — keeping
+// this file clean protects the AdSense account.
+// ─────────────────────────────────────────────────────────
+
+const CACHE_NAME = 'vergr-v3';
 
 // Skip waiting immediately to replace old broken SW
 self.addEventListener('install', () => self.skipWaiting());
@@ -24,7 +32,6 @@ self.addEventListener('fetch', (e) => {
     url.hostname.includes('giphy.com') ||
     url.hostname.includes('rss2json.com') ||
     url.hostname.includes('dicebear.com') ||
-    url.hostname.includes('jitsi') ||
     url.hostname !== self.location.hostname
   ) {
     return; // Let the browser handle it natively

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
-import { db, auth } from '../../firebase/config';
+import { auth } from '../../firebase/config';
+import { useNotifications } from '../../context/NotificationContext';
 import UserAvatar from '../../components/UserAvatar';
 import Icon from '../../components/Icon';
 import { timeAgo, getTier } from '../../utils/helpers';
@@ -10,34 +10,16 @@ import useResponsive from '../../hooks/useResponsive';
 export default function MessagesInboxScreen() {
   const { isDesktop } = useResponsive();
   const navigate = useNavigate();
-  const [conversations, setConversations] = useState([]);
-  const [loading, setLoading] = useState(true);
+  // Conversations come from the single shared NotificationContext listener.
+  // The screen used to mount its own onSnapshot, doubling Firestore reads.
+  const { conversations } = useNotifications();
+  const loading = !conversations;
   const [search, setSearch] = useState('');
-  const [tick, setTick] = useState(0);
+  const [, setTick] = useState(0);
 
   useEffect(() => {
     const timer = setInterval(() => setTick(t => t + 1), 60000);
     return () => clearInterval(timer);
-  }, []);
-
-  useEffect(() => {
-    if (!auth.currentUser) return;
-    const q = query(
-      collection(db, 'conversations'),
-      where('participants', 'array-contains', auth.currentUser.uid),
-      where('status', '==', 'active'),
-      orderBy('lastMessageAt', 'desc')
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      setConversations(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      setLoading(false);
-    }, (error) => {
-      console.error("Inbox listener error:", error);
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
   }, []);
 
   const filtered = search
@@ -74,15 +56,24 @@ export default function MessagesInboxScreen() {
             <h1 className="font-syne text-[17px] font-bold text-text-primary">Messages</h1>
           </div>
           <div className="flex items-center gap-1">
-            <button 
-              onClick={() => navigate('/messages/requests')} 
+            <button
+              onClick={() => navigate('/messages/requests')}
               className="w-9 h-9 rounded-full flex items-center justify-center text-text-muted hover:text-text-secondary transition-colors relative"
+              title="Message Requests"
             >
               <Icon name="mail" size={20} />
             </button>
-            <button 
-              onClick={() => navigate('/messages/new')} 
+            <button
+              onClick={() => navigate('/messages/create-group')}
               className="w-9 h-9 rounded-full flex items-center justify-center text-text-muted hover:text-text-secondary transition-colors"
+              title="New Group Chat"
+            >
+              <Icon name="group_add" size={20} />
+            </button>
+            <button
+              onClick={() => navigate('/messages/new')}
+              className="w-9 h-9 rounded-full flex items-center justify-center text-text-muted hover:text-text-secondary transition-colors"
+              title="New Message"
             >
               <Icon name="edit_square" size={20} />
             </button>
@@ -216,9 +207,10 @@ export default function MessagesInboxScreen() {
       {/* FAB for new message (mobile only) */}
       <button 
         onClick={() => navigate('/messages/new')}
-        className="fixed bottom-24 right-5 lg:bottom-6 lg:right-6 w-13 h-13 rounded-full bg-brand-cyan text-bg-dark flex items-center justify-center z-30 hover:brightness-110 active:scale-95 transition-all"
+        className="fixed bottom-24 right-5 lg:bottom-6 lg:right-6 w-14 h-14 rounded-full bg-brand-cyan text-bg-dark flex items-center justify-center z-30 shadow-lg shadow-brand-cyan/30 hover:brightness-110 active:scale-95 transition-all"
+        aria-label="Start new chat"
       >
-        <Icon name="edit" size={24} />
+        <Icon name="edit" size={22} />
       </button>
     </div>
   );

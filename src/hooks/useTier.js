@@ -1,40 +1,19 @@
 // src/hooks/useTier.js
-import { useState, useEffect, useCallback } from 'react';
-import { doc, onSnapshot } from 'firebase/firestore';
-import { db, auth } from '../firebase/config';
+import { useCallback } from 'react';
+import { useUser } from '../context/UserContext';
 import { getTierConfig, checkFeatureAccess, checkFileSizeAccess } from '../utils/tierSystem';
 
 /**
  * useTier — Returns the current user's tier and helper functions.
  *
- * Reads `tier` field from the user's Firestore profile doc.
- * Defaults to 'free' if not set.
- *
- * Returns:
- *   tier        — 'free' | 'lite' | 'pro'
- *   tierConfig  — full config object from tierSystem.js
- *   checkFeature(featureKey) — { allowed, requiredTier, message }
- *   checkFileSize(bytes)     — { allowed, requiredTier, message }
- *   isPro       — boolean shortcut
- *   isLite      — boolean shortcut
- *   isFree      — boolean shortcut
+ * Reads `tier` field from the shared UserContext profile (no extra Firestore
+ * listener — UserContext already subscribes to the user doc once for the
+ * whole app, so adding our own listener here was doubling read costs on
+ * every profile/wallet update).
  */
 export default function useTier() {
-  const [tier, setTier] = useState('free');
-
-  useEffect(() => {
-    if (!auth.currentUser) return;
-    const unsub = onSnapshot(
-      doc(db, 'users', auth.currentUser.uid),
-      (snap) => {
-        if (snap.exists()) {
-          setTier(snap.data().tier || 'free');
-        }
-      },
-      () => {} // silently fail
-    );
-    return () => unsub();
-  }, []);
+  const { profile } = useUser();
+  const tier = profile?.tier || 'free';
 
   const tierConfig = getTierConfig(tier);
 

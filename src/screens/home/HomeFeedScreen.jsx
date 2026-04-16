@@ -1,63 +1,69 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useUser } from '../../context/UserContext';
 import { useAuth } from '../../context/AuthContext';
 import { useNotifications } from '../../context/NotificationContext';
-import { getFeedPosts, getTrendingPosts, getFollowingFeedPosts } from '../../firebase/firestore';
+import { getFeedPosts, getTrendingPosts, getFollowingFeedPosts, getActiveFirestoreAds, getNewerFeedPosts } from '../../firebase/firestore';
 import PostCard from '../../components/PostCard';
 import CoinDisplay from '../../components/CoinDisplay';
 import Icon from '../../components/Icon';
 import RightSidebarPanel from '../../components/RightSidebarPanel';
 import DailyRewardBanner from '../../components/DailyRewardBanner';
+import WatchToEarnQuest from '../../components/WatchToEarnQuest';
 import SuggestionsCarousel from '../../components/SuggestionsCarousel';
 import AdCard from '../../components/AdCard';
+import VergrAd from '../../components/VergrAd';
+import { ADS_CONFIG } from '../../config/ads';
+import NewsPostCard from '../../components/NewsPostCard';
 import CreatePostModal from '../../components/CreatePostModal';
 import useResponsive from '../../hooks/useResponsive';
 import { useLayout } from '../../context/LayoutContext';
-import { getKlipyAds } from '../../services/klipyAdService';
 import { injectAdsRandomly } from '../../utils/feedInjections';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../../firebase/config';
 
 const FEED_TABS = ['For You', 'Following', 'Gaming News', 'Trending'];
 
-const NEWS_SOURCES = [
-  { name: 'IGN', url: 'https://api.rss2json.com/v1/api.json?rss_url=https://feeds.feedburner.com/ign/all', icon: '🎮' },
-  { name: 'GameSpot', url: 'https://api.rss2json.com/v1/api.json?rss_url=https://www.gamespot.com/feeds/mashup/', icon: '🕹️' },
-  { name: 'Kotaku', url: 'https://api.rss2json.com/v1/api.json?rss_url=https://kotaku.com/rss', icon: '📰' },
-];
+// RSS Proxy endpoint
+const RSS_PROXY_BASE = 'https://europe-west1-vergr-44494.cloudfunctions.net/rssProxy?url=';
 
-function newsItemToPost(item, source) {
-  return {
-    id: `news-${Date.now()}-${Math.random()}`,
-    type: 'news',
-    content: item.title,
-    author: {
-      displayName: source.name,
-      username: source.name.toLowerCase(),
-      avatar: null,
-      isVerified: true,
-    },
-    authorId: 'news-bot',
-    createdAt: new Date(item.pubDate),
-    mediaUrls: item.thumbnail ? [item.thumbnail] : [],
-    linkPreview: { url: item.link, title: item.title, description: item.description?.slice(0, 200) },
-    commentCount: 0,
-    likeCount: 0,
-    shareCount: 0,
-    saveCount: 0,
-    viewCount: 0,
-    isNews: true,
-  };
-}
+// RSS sources with bot user IDs (to fetch avatars from Firestore)
+const NEWS_SOURCES = [
+  // Major Gaming News Outlets
+  { name: 'IGN', url: 'https://feeds.feedburner.com/ign/all', botId: 'news-ign' },
+  { name: 'GameSpot', url: 'https://www.gamespot.com/feeds/mashup/', botId: 'news-gamespot' },
+  { name: 'Kotaku', url: 'https://kotaku.com/rss', botId: 'news-kotaku' },
+  { name: 'Polygon', url: 'https://www.polygon.com/rss/index.xml', botId: 'news-polygon' },
+  { name: 'Eurogamer', url: 'https://www.eurogamer.net/?format=rss', botId: 'news-eurogamer' },
+  { name: 'Destructoid', url: 'https://www.destructoid.com/feed/', botId: 'news-destructoid' },
+  { name: 'PC Gamer', url: 'https://www.pcgamer.com/rss', botId: 'news-pcgamer' },
+  { name: 'Rock Paper Shotgun', url: 'https://www.rockpapershotgun.com/feed', botId: 'news-rockpapershotgun' },
+  { name: 'VG247', url: 'https://www.vg247.com/feed', botId: 'news-vg247' },
+  { name: 'Nintendo Life', url: 'https://www.nintendolife.com/feed', botId: 'news-nintendolife' },
+  { name: 'Push Square', url: 'https://www.pushsquare.com/feed', botId: 'news-pushsquare' },
+  { name: 'Pure Xbox', url: 'https://www.purexbox.com/feed', botId: 'news-purexbox' },
+  // Developer & Publisher Blogs
+  { name: 'Blizzard News', url: 'https://news.blizzard.com/en-us/news?feed=rss', botId: 'news-blizzard' },
+  { name: 'Xbox Wire', url: 'https://news.xbox.com/en-us/feed/', botId: 'news-xboxwire' },
+  { name: 'PlayStation Blog', url: 'https://blog.playstation.com/feed/', botId: 'news-playstation' },
+  { name: 'Ubisoft News', url: 'https://news.ubisoft.com/en-us/rss', botId: 'news-ubisoft' },
+  { name: 'Epic Games News', url: 'https://www.epicgames.com/site/en-US/news?lang=en-US&feed=rss', botId: 'news-epicgames' },
+  { name: 'Bethesda Blog', url: 'https://bethesda.net/en/dashboard?rss=news', botId: 'news-bethesda' },
+  { name: 'Square Enix News', url: 'https://square-enix-games.com/en-us/news.rss', botId: 'news-squareenix' },
+  { name: 'CD Projekt Red', url: 'https://www.cdprojektred.com/en/news/feed', botId: 'news-cdprojekt' },
+  { name: 'Valve News', url: 'https://store.steampowered.com/news/rss/', botId: 'news-valve' },
+  // Industry & Indie
+  { name: 'Game Developer', url: 'https://www.gamedeveloper.com/feed', botId: 'news-gamedeveloper' },
+  { name: 'Gematsu', url: 'https://www.gematsu.com/feed', botId: 'news-gematsu' },
+  { name: 'Blue\'s News', url: 'https://www.bluesnews.com/rss.xml', botId: 'news-bluesnews' },
+  { name: 'itch.io News', url: 'https://itch.io/games/feed', botId: 'news-itchio' },
+];
 
 export default function HomeFeedScreen() {
   const [activeTab, setActiveTab] = useState('For You');
-  const [posts, setPosts] = useState([]);
-  const [postsLoading, setPostsLoading] = useState(true);
-  const [newsItems, setNewsItems] = useState([]);
-  const [newsLoading, setNewsLoading] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [klipyAds, setKlipyAds] = useState([]);
+  const [ads, setAds] = useState([]);
   const [adsLoading, setAdsLoading] = useState(false);
   const { profile, wallet } = useUser();
   const { currentUser } = useAuth();
@@ -66,115 +72,374 @@ export default function HomeFeedScreen() {
   const { isMobile, isDesktop } = useResponsive();
   const { setRightPanel, setContentAlign, setLayout } = useLayout();
 
+  // Per-tab cached state
+  const [forYouPosts, setForYouPosts] = useState([]);
+  const [forYouLoading, setForYouLoading] = useState(true);
+  const [forYouHasMore, setForYouHasMore] = useState(true);
+  const [forYouLoadingMore, setForYouLoadingMore] = useState(false);
+  const forYouLastDocRef = useRef(null);
+
+  const [followingPosts, setFollowingPosts] = useState([]);
+  const [followingLoading, setFollowingLoading] = useState(true);
+  const [followingHasMore, setFollowingHasMore] = useState(true);
+  const [followingLoadingMore, setFollowingLoadingMore] = useState(false);
+  const followingLastDocRef = useRef(null);
+
+  const [trendingPosts, setTrendingPosts] = useState([]);
+  const [trendingLoading, setTrendingLoading] = useState(true);
+  const [trendingHasMore, setTrendingHasMore] = useState(true);
+  const [trendingLoadingMore, setTrendingLoadingMore] = useState(false);
+  const trendingLastDocRef = useRef(null);
+
+  const [newsItems, setNewsItems] = useState([]);
+  const [newsLoading, setNewsLoading] = useState(true);
+
+  // Pull-to-refresh state
+  const [refreshing, setRefreshing] = useState(false);
+  const [pullDistance, setPullDistance] = useState(0);
+  const pullStartY = useRef(0);
+  const pullActive = useRef(false);
+  const feedScrollRef = useRef(null);
+
+  // Track which tabs have been fetched
+  const fetched = useRef({ following: false, trending: false, news: false });
+
   useEffect(() => {
     if (isDesktop) {
       setRightPanel(<RightSidebarPanel />);
       setContentAlign('left');
       setLayout('professional');
     }
-    return () => {
-      setRightPanel(null);
-      setContentAlign('center');
-      setLayout('standard');
-    };
+    return () => { setRightPanel(null); setContentAlign('center'); setLayout('standard'); };
   }, [isDesktop, setRightPanel, setContentAlign, setLayout]);
 
-  // Fetch Klipy ads once
+  // Fetch ads once — Firestore ads only. Klipy ads live in the Messages media panel (GIFs/Stickers/Clips).
   useEffect(() => {
     const fetchAds = async () => {
       setAdsLoading(true);
-      const ads = await getKlipyAds(10);
-      setKlipyAds(ads);
+      try {
+        const firestoreAds = await getActiveFirestoreAds(10);
+        setAds(firestoreAds || []);
+      } catch {
+        setAds([]);
+      }
       setAdsLoading(false);
     };
     fetchAds();
   }, []);
 
-  // Fetch news once when component mounts (for For You feed)
+  // Fetch For You on mount
   useEffect(() => {
-    const fetchNewsForFeed = async () => {
-      setNewsLoading(true);
+    const load = async () => {
+      setForYouLoading(true);
       try {
-        const allNews = await Promise.all(
-          NEWS_SOURCES.map(async (source) => {
-            try {
-              const res = await fetch(source.url);
-              const data = await res.json();
-              return (data.items || []).map((item) => ({
-                ...item,
-                source: source.name,
-                sourceIcon: source.icon,
-              }));
-            } catch {
-              return [];
-            }
-          })
-        );
-        const flatNews = allNews.flat().sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate)).slice(0, 30);
-        setNewsItems(flatNews);
-      } catch (error) {
-        console.error('Error fetching news:', error);
-      } finally {
-        setNewsLoading(false);
-      }
+        const posts = await getFeedPosts(10) || [];
+        setForYouPosts(posts);
+        forYouLastDocRef.current = posts._lastDoc || null;
+        setForYouHasMore(posts.length >= 10);
+      } catch { setForYouPosts([]); setForYouHasMore(false); }
+      setForYouLoading(false);
     };
-    fetchNewsForFeed();
+    load();
   }, []);
 
-  const fetchPosts = useCallback(async () => {
-    setPostsLoading(true);
-    try {
-      let data;
-      if (activeTab === 'Trending') {
-        data = await getTrendingPosts(20);
-      } else if (activeTab === 'Following' && currentUser?.uid) {
-        data = await getFollowingFeedPosts(currentUser.uid, 20);
-      } else {
-        data = await getFeedPosts(20);
-      }
-      setPosts(data || []);
-    } catch (error) {
-      console.error('Error fetching posts:', error);
-      setPosts([]);
-    } finally {
-      setPostsLoading(false);
-    }
+  // Fetch Following when tab is first selected
+  useEffect(() => {
+    if (activeTab !== 'Following' || fetched.current.following || !currentUser?.uid) return;
+    fetched.current.following = true;
+    const load = async () => {
+      setFollowingLoading(true);
+      try {
+        const posts = await getFollowingFeedPosts(currentUser.uid, 10) || [];
+        setFollowingPosts(posts);
+        followingLastDocRef.current = posts._lastDoc || null;
+        setFollowingHasMore(posts.length >= 10);
+      } catch { setFollowingPosts([]); setFollowingHasMore(false); }
+      setFollowingLoading(false);
+    };
+    load();
   }, [activeTab, currentUser?.uid]);
 
-  const fetchNewsForGamingTab = useCallback(async () => {
-    setNewsLoading(true);
-    try {
-      const allNews = await Promise.all(
-        NEWS_SOURCES.map(async (source) => {
-          try {
-            const res = await fetch(source.url);
-            const data = await res.json();
-            return (data.items || []).map((item) => ({
-              ...item,
-              source: source.name,
-              sourceIcon: source.icon,
-            }));
-          } catch {
-            return [];
-          }
-        })
-      );
-      const flatNews = allNews.flat().sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate)).slice(0, 30);
-      setNewsItems(flatNews);
-    } catch (error) {
-      console.error('Error fetching news:', error);
-    } finally {
-      setNewsLoading(false);
-    }
-  }, []);
-
+  // Fetch Trending when tab is first selected
   useEffect(() => {
-    if (activeTab === 'Gaming News') {
-      fetchNewsForGamingTab();
-    } else {
-      fetchPosts();
-    }
-  }, [activeTab, fetchPosts, fetchNewsForGamingTab]);
+    if (activeTab !== 'Trending' || fetched.current.trending) return;
+    fetched.current.trending = true;
+    const load = async () => {
+      setTrendingLoading(true);
+      try {
+        const posts = await getTrendingPosts(10) || [];
+        setTrendingPosts(posts);
+        trendingLastDocRef.current = posts._lastDoc || null;
+        setTrendingHasMore(posts.length >= 10);
+      } catch { setTrendingPosts([]); setTrendingHasMore(false); }
+      setTrendingLoading(false);
+    };
+    load();
+  }, [activeTab]);
+
+  // ─── Infinite scroll: load more when sentinel enters viewport ───
+  const loadMoreForYou = useCallback(async () => {
+    if (forYouLoadingMore || !forYouHasMore || !forYouLastDocRef.current) return;
+    setForYouLoadingMore(true);
+    try {
+      const more = await getFeedPosts(10, forYouLastDocRef.current) || [];
+      setForYouPosts(prev => [...prev, ...more]);
+      forYouLastDocRef.current = more._lastDoc || null;
+      if (more.length < 10) setForYouHasMore(false);
+    } catch {}
+    setForYouLoadingMore(false);
+  }, [forYouLoadingMore, forYouHasMore]);
+
+  const loadMoreFollowing = useCallback(async () => {
+    if (followingLoadingMore || !followingHasMore || !followingLastDocRef.current || !currentUser?.uid) return;
+    setFollowingLoadingMore(true);
+    try {
+      const more = await getFollowingFeedPosts(currentUser.uid, 10, followingLastDocRef.current) || [];
+      setFollowingPosts(prev => [...prev, ...more]);
+      followingLastDocRef.current = more._lastDoc || null;
+      if (more.length < 10) setFollowingHasMore(false);
+    } catch {}
+    setFollowingLoadingMore(false);
+  }, [followingLoadingMore, followingHasMore, currentUser?.uid]);
+
+  const loadMoreTrending = useCallback(async () => {
+    if (trendingLoadingMore || !trendingHasMore || !trendingLastDocRef.current) return;
+    setTrendingLoadingMore(true);
+    try {
+      const more = await getTrendingPosts(20, trendingLastDocRef.current) || [];
+      setTrendingPosts(prev => [...prev, ...more]);
+      trendingLastDocRef.current = more._lastDoc || null;
+      if (more.length < 10) setTrendingHasMore(false);
+    } catch {}
+    setTrendingLoadingMore(false);
+  }, [trendingLoadingMore, trendingHasMore]);
+
+  // Sentinel observer — triggers loadMore for the active tab
+  const sentinelRef = useRef(null);
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver((entries) => {
+      if (!entries[0].isIntersecting) return;
+      if (activeTab === 'For You') loadMoreForYou();
+      else if (activeTab === 'Following') loadMoreFollowing();
+      else if (activeTab === 'Trending') loadMoreTrending();
+    }, { rootMargin: '400px' });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [activeTab, loadMoreForYou, loadMoreFollowing, loadMoreTrending]);
+
+  // ─── Pull-to-refresh ───
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      if (activeTab === 'For You') {
+        // Get newest timestamp
+        const newest = forYouPosts[0]?.createdAt;
+        if (newest) {
+          const newer = await getNewerFeedPosts(newest, 10);
+          if (newer.length > 0) setForYouPosts(prev => [...newer, ...prev]);
+        } else {
+          const posts = await getFeedPosts(10) || [];
+          setForYouPosts(posts);
+          forYouLastDocRef.current = posts._lastDoc || null;
+        }
+      } else if (activeTab === 'Following' && currentUser?.uid) {
+        const posts = await getFollowingFeedPosts(currentUser.uid, 10) || [];
+        setFollowingPosts(posts);
+        followingLastDocRef.current = posts._lastDoc || null;
+      } else if (activeTab === 'Trending') {
+        const posts = await getTrendingPosts(10) || [];
+        setTrendingPosts(posts);
+        trendingLastDocRef.current = posts._lastDoc || null;
+      }
+    } catch {}
+    setRefreshing(false);
+  }, [activeTab, currentUser?.uid, forYouPosts]);
+
+  // Pull-to-refresh touch handlers (mobile only)
+  useEffect(() => {
+    if (!isMobile) return;
+    const onTouchStart = (e) => {
+      if (window.scrollY <= 0 && !refreshing) {
+        pullStartY.current = e.touches[0].clientY;
+        pullActive.current = true;
+      }
+    };
+    const onTouchMove = (e) => {
+      if (!pullActive.current) return;
+      const delta = e.touches[0].clientY - pullStartY.current;
+      if (delta > 0) {
+        setPullDistance(Math.min(delta, 100));
+      } else {
+        pullActive.current = false;
+        setPullDistance(0);
+      }
+    };
+    const onTouchEnd = () => {
+      if (!pullActive.current) return;
+      pullActive.current = false;
+      if (pullDistance > 70) {
+        handleRefresh();
+      }
+      setPullDistance(0);
+    };
+    window.addEventListener('touchstart', onTouchStart, { passive: true });
+    window.addEventListener('touchmove', onTouchMove, { passive: true });
+    window.addEventListener('touchend', onTouchEnd);
+    return () => {
+      window.removeEventListener('touchstart', onTouchStart);
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('touchend', onTouchEnd);
+    };
+  }, [isMobile, pullDistance, handleRefresh, refreshing]);
+
+  // ─── Video autoplay on scroll ───
+  useEffect(() => {
+    const obs = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        const v = entry.target;
+        if (!(v instanceof HTMLVideoElement)) continue;
+        if (entry.isIntersecting && entry.intersectionRatio > 0.5) {
+          v.play().catch(() => {});
+        } else {
+          if (!v.paused) v.pause();
+        }
+      }
+    }, { threshold: [0, 0.5, 1] });
+
+    // Observe all feed videos
+    const attach = () => {
+      document.querySelectorAll('video[data-feed-video="1"]').forEach(v => obs.observe(v));
+    };
+    attach();
+    const timer = setInterval(attach, 1500); // re-attach as new posts render
+    return () => { clearInterval(timer); obs.disconnect(); };
+  }, [activeTab, forYouPosts, followingPosts, trendingPosts]);
+
+  // Fetch Gaming News when tab is first selected (using RSS proxy + bot avatars).
+  // Bot avatars are persisted to localStorage with a 7-day TTL — these accounts
+  // never change their avatar, so we should NOT pay 25 Firestore reads every time
+  // someone opens this tab.
+  useEffect(() => {
+    if (activeTab !== 'Gaming News' || fetched.current.news) return;
+    fetched.current.news = true;
+    const fetchNews = async () => {
+      setNewsLoading(true);
+
+      const NEWS_AVATAR_CACHE_KEY = 'vergr_news_bot_avatars_v1';
+      const NEWS_AVATAR_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+      // 1. Try the localStorage cache first
+      let avatarCache = {};
+      let cacheStale = true;
+      try {
+        const raw = localStorage.getItem(NEWS_AVATAR_CACHE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && parsed.savedAt && Date.now() - parsed.savedAt < NEWS_AVATAR_TTL_MS && parsed.avatars) {
+            avatarCache = parsed.avatars;
+            cacheStale = false;
+          }
+        }
+      } catch {}
+
+      // 2. Kick off RSS fetches in parallel — and only fetch avatars if cache is stale
+      const [rssResults, avatarResults] = await Promise.all([
+        Promise.allSettled(
+          NEWS_SOURCES.map(async (source) => {
+            const proxyUrl = `${RSS_PROXY_BASE}${encodeURIComponent(source.url)}`;
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000);
+            try {
+              const res = await fetch(proxyUrl, { signal: controller.signal });
+              clearTimeout(timeoutId);
+              if (!res.ok) throw new Error(`HTTP ${res.status}`);
+              const data = await res.json();
+              return { source, items: data.items || [] };
+            } catch (err) {
+              clearTimeout(timeoutId);
+              console.warn(`Failed to fetch ${source.name}:`, err.message);
+              return { source, items: [] };
+            }
+          })
+        ),
+        cacheStale
+          ? Promise.allSettled(
+              NEWS_SOURCES.map(async (source) => {
+                if (!source.botId) return { botId: null, avatar: null };
+                try {
+                  const userDoc = await getDoc(doc(db, 'users', source.botId));
+                  return {
+                    botId: source.botId,
+                    avatar: userDoc.exists() ? userDoc.data().avatar || null : null,
+                  };
+                } catch {
+                  return { botId: source.botId, avatar: null };
+                }
+              })
+            )
+          : Promise.resolve([]),
+      ]);
+
+      // 3. Refresh cache if we did fetch new avatars
+      if (cacheStale) {
+        for (const r of avatarResults) {
+          if (r.status === 'fulfilled' && r.value.botId) {
+            avatarCache[r.value.botId] = r.value.avatar;
+          }
+        }
+        try {
+          localStorage.setItem(
+            NEWS_AVATAR_CACHE_KEY,
+            JSON.stringify({ savedAt: Date.now(), avatars: avatarCache })
+          );
+        } catch {}
+      }
+
+      // Merge RSS items with avatars
+      const allNews = [];
+      for (const r of rssResults) {
+        if (r.status !== 'fulfilled') continue;
+        const { source, items } = r.value;
+        for (const item of items) {
+          allNews.push({
+            ...item,
+            source: source.name,
+            avatar: avatarCache[source.botId] || null,
+          });
+        }
+      }
+
+      if (allNews.length === 0) {
+        // Allow re-fetch if everything failed
+        fetched.current.news = false;
+      }
+
+      setNewsItems(
+        allNews.sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate)).slice(0, 50)
+      );
+      setNewsLoading(false);
+    };
+    fetchNews();
+  }, [activeTab]);
+
+  const handleDeletePost = (tabSetter) => (id) => tabSetter(prev => prev.filter(p => p.id !== id));
+
+  const createLikeUpdateHandler = (tabSetter) => (postId, newLikeCount) => {
+    tabSetter(prev => prev.map(post => 
+      post.id === postId ? { ...post, likeCount: newLikeCount } : post
+    ));
+  };
+
+  const [newsVideoViewer, setNewsVideoViewer] = useState(null);
+
+  const handleOpenNewsVideo = (item) => {
+    // Collect all news items that have YouTube videos for the viewer
+    const videoItems = newsItems.filter(n => n.youtubeVideoId);
+    const idx = videoItems.findIndex(n => n === item || (n.youtubeVideoId === item.youtubeVideoId && n.title === item.title));
+    setNewsVideoViewer({ items: videoItems, index: Math.max(0, idx) });
+  };
 
   const renderGamingNews = () => {
     if (newsLoading) {
@@ -188,24 +453,13 @@ export default function HomeFeedScreen() {
     if (newsItems.length === 0) {
       return <div className="text-center py-20 px-6"><p className="text-text-muted">No news available</p></div>;
     }
-    return (
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 p-4">
-        {newsItems.map((item, idx) => (
-          <a key={idx} href={item.link} target="_blank" rel="noopener noreferrer" className="block rounded-2xl border border-white/[0.06] bg-surface-1 overflow-hidden hover:border-white/[0.12] transition-all hover:translate-y-[-2px] group">
-            {item.thumbnail && <div className="aspect-video w-full overflow-hidden"><img src={item.thumbnail} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" /></div>}
-            <div className="p-4">
-              <div className="flex items-center gap-2 mb-2"><span className="text-sm">{item.sourceIcon}</span><span className="text-xs text-brand-cyan font-bold uppercase tracking-wider">{item.source}</span><span className="text-text-muted text-xs">· {new Date(item.pubDate).toLocaleDateString()}</span></div>
-              <h3 className="font-syne font-bold text-text-primary text-base leading-snug mb-2 line-clamp-2">{item.title}</h3>
-              <p className="text-text-secondary text-sm line-clamp-2">{item.description?.replace(/<[^>]*>/g, '').slice(0, 100)}...</p>
-            </div>
-          </a>
-        ))}
-      </div>
-    );
+    return newsItems.map((item, idx) => (
+      <NewsPostCard key={`${item.source}-${idx}`} item={item} onOpenVideo={handleOpenNewsVideo} />
+    ));
   };
 
   const renderForYou = () => {
-    if (postsLoading) {
+    if (forYouLoading) {
       return (
         <div className="flex flex-col items-center justify-center py-20">
           <div className="w-8 h-8 border-2 border-surface-3 border-t-brand-cyan rounded-full animate-spin mb-4" />
@@ -214,74 +468,82 @@ export default function HomeFeedScreen() {
       );
     }
 
-    // Build the feed array: start with posts (or news if no posts)
-    let feedItems = [];
-    if (posts.length === 0 && newsItems.length > 0) {
-      // No posts, show news as placeholders
-      const newsPosts = newsItems.slice(0, 5).map((item) => {
-        const source = NEWS_SOURCES.find(s => s.name === item.source) || NEWS_SOURCES[0];
-        return newsItemToPost(item, source);
-      });
-      feedItems = newsPosts;
-    } else {
-      feedItems = [...posts];
-    }
-
-    // Inject Klipy ads (if any)
-    if (klipyAds.length && !adsLoading) {
-      feedItems = injectAdsRandomly(feedItems, klipyAds, 3, 6);
+    let feedItems = [...forYouPosts];
+    if (ads.length > 0 && !adsLoading) {
+      feedItems = injectAdsRandomly(feedItems, ads, 3, 6);
     }
 
     const elements = [];
-    // Force carousel at the top
     elements.push(<SuggestionsCarousel key="carousel-top" />);
 
-    // Inject up to 3 news items at the top (distinct)
-    if (newsItems.length > 0) {
-      const newsToShow = newsItems.slice(0, 3);
-      newsToShow.forEach((news, idx) => {
-        const source = NEWS_SOURCES.find(s => s.name === news.source) || NEWS_SOURCES[0];
-        const newsPost = newsItemToPost(news, source);
-        elements.push(<PostCard key={`news-top-${idx}`} post={newsPost} onDeleted={() => {}} />);
-      });
-    }
-
-    // Then add all feed items (posts/ads)
+    // Track real-post index separately so PropellerAds slots are spaced
+     // by *content posts seen*, not by mixed (post + user-ad) positions.
+    let postsSinceAd = 0;
     feedItems.forEach((item, index) => {
       if (item.isAd) {
-        elements.push(<AdCard key={`ad-${index}`} ad={item} />);
+        elements.push(<AdCard key={`ad-${item.id || index}`} ad={item} />);
       } else {
         elements.push(
           <PostCard
             key={item.id}
             post={item}
-            onDeleted={(id) => setPosts((prev) => prev.filter((p) => p.id !== id))}
+            onDeleted={handleDeletePost(setForYouPosts)}
+            onLikeUpdate={createLikeUpdateHandler(setForYouPosts)}
           />
         );
+        postsSinceAd++;
+        if (postsSinceAd >= ADS_CONFIG.feedAdInterval) {
+          elements.push(<VergrAd key={`vergrad-${index}`} zone="inpage" />);
+          postsSinceAd = 0;
+        }
       }
     });
 
+    if (elements.length <= 1) {
+      elements.push(
+        <div key="empty" className="text-center py-20 px-6">
+          <div className="w-20 h-20 bg-surface-1 rounded-3xl flex items-center justify-center mx-auto mb-6 border border-white/[0.06]"><Icon name="dynamic_feed" size={40} className="text-text-muted/30" /></div>
+          <h3 className="font-syne font-bold text-text-primary text-xl mb-2">Your feed is empty</h3>
+          <p className="text-text-muted max-w-xs mx-auto mb-6">Follow gamers and explore to see posts here.</p>
+          <button onClick={() => navigate('/explore')} className="px-6 py-2.5 rounded-full bg-brand-cyan text-bg-dark font-bold text-sm">Explore</button>
+        </div>
+      );
+    }
     return elements;
   };
 
   const renderFollowing = () => {
-    if (postsLoading) {
+    if (followingLoading) {
       return <div className="flex flex-col items-center justify-center py-20"><div className="w-8 h-8 border-2 border-surface-3 border-t-brand-cyan rounded-full animate-spin mb-4" /><p className="text-text-muted text-xs font-dmmono">Loading followed posts...</p></div>;
     }
-    if (posts.length === 0) {
+    if (followingPosts.length === 0) {
       return <div className="text-center py-20 px-6"><div className="w-20 h-20 bg-surface-1 rounded-3xl flex items-center justify-center mx-auto mb-6 border border-white/[0.06]"><Icon name="person_add" size={40} className="text-text-muted/30" /></div><h3 className="font-syne font-bold text-text-primary text-xl mb-2">No followed posts</h3><p className="text-text-muted max-w-xs mx-auto mb-6">Follow gamers to see their posts here.</p><button onClick={() => navigate('/explore')} className="px-6 py-2.5 rounded-full bg-brand-cyan text-bg-dark font-bold text-sm">Explore</button></div>;
     }
-    return posts.map((post) => <PostCard key={post.id} post={post} onDeleted={(id) => setPosts((prev) => prev.filter((p) => p.id !== id))} />);
+    return followingPosts.map((post) => (
+      <PostCard 
+        key={post.id} 
+        post={post} 
+        onDeleted={handleDeletePost(setFollowingPosts)} 
+        onLikeUpdate={createLikeUpdateHandler(setFollowingPosts)}
+      />
+    ));
   };
 
   const renderTrending = () => {
-    if (postsLoading) {
+    if (trendingLoading) {
       return <div className="flex flex-col items-center justify-center py-20"><div className="w-8 h-8 border-2 border-surface-3 border-t-brand-cyan rounded-full animate-spin mb-4" /><p className="text-text-muted text-xs font-dmmono">Loading trending posts...</p></div>;
     }
-    if (posts.length === 0) {
+    if (trendingPosts.length === 0) {
       return <div className="text-center py-20 px-6"><p className="text-text-muted">No trending posts yet</p></div>;
     }
-    return posts.map((post) => <PostCard key={post.id} post={post} onDeleted={(id) => setPosts((prev) => prev.filter((p) => p.id !== id))} />);
+    return trendingPosts.map((post) => (
+      <PostCard 
+        key={post.id} 
+        post={post} 
+        onDeleted={handleDeletePost(setTrendingPosts)} 
+        onLikeUpdate={createLikeUpdateHandler(setTrendingPosts)}
+      />
+    ));
   };
 
   const renderContent = () => {
@@ -302,10 +564,10 @@ export default function HomeFeedScreen() {
           <div className="flex items-center gap-3"><CoinDisplay amount={wallet?.balance || 0} size="sm" /><button onClick={() => navigate('/notifications')} className="relative"><Icon name="notifications" size={22} className="text-text-secondary" />{unreadNotifCount > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-brand-ember text-[10px] flex items-center justify-center font-bold text-white border-2 border-bg-dark">{unreadNotifCount > 9 ? '9+' : unreadNotifCount}</span>}</button></div>
         </header>
       )}
-      <div className="sticky top-0 lg:top-0 z-30 glass-header px-2" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+      <div className="sticky top-[52px] lg:top-0 z-30 glass-header px-2" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
         <div className="flex items-center overflow-x-auto no-scrollbar">
           {FEED_TABS.map((tab) => (
-            <button key={tab} onClick={() => setActiveTab(tab)} className={`flex-none px-5 py-3.5 text-[13px] font-semibold transition-colors relative ${activeTab === tab ? 'text-text-primary' : 'text-text-muted hover:text-text-secondary'}`}>
+            <button key={tab} onClick={() => setActiveTab(tab)} className={`flex-none px-5 py-3.5 text-[13px] font-semibold whitespace-nowrap transition-colors relative ${activeTab === tab ? 'text-text-primary' : 'text-text-muted hover:text-text-secondary'}`}>
               {tab}
               {activeTab === tab && <motion.div layoutId="feedTabIndicator" className="absolute bottom-0 left-2 right-2 h-[2px] bg-brand-cyan rounded-full" transition={{ type: 'spring', stiffness: 500, damping: 35 }} />}
             </button>
@@ -313,9 +575,180 @@ export default function HomeFeedScreen() {
         </div>
       </div>
       <DailyRewardBanner />
+      <WatchToEarnQuest />
+
+      {/* Pull-to-refresh indicator */}
+      {(pullDistance > 0 || refreshing) && (
+        <div
+          className="flex items-center justify-center overflow-hidden transition-all"
+          style={{ height: refreshing ? 50 : pullDistance }}
+        >
+          <div className={`w-5 h-5 border-2 border-surface-3 border-t-brand-cyan rounded-full ${refreshing ? 'animate-spin' : ''}`} />
+        </div>
+      )}
+
       <div className="flex-1 w-full">{renderContent()}</div>
+
+      {/* Infinite scroll sentinel + loader */}
+      {(activeTab === 'For You' || activeTab === 'Following' || activeTab === 'Trending') && (
+        <div ref={sentinelRef} className="py-6 flex justify-center">
+          {(forYouLoadingMore && activeTab === 'For You') ||
+           (followingLoadingMore && activeTab === 'Following') ||
+           (trendingLoadingMore && activeTab === 'Trending') ? (
+            <div className="w-5 h-5 border-2 border-surface-3 border-t-brand-cyan rounded-full animate-spin" />
+          ) : (
+            (activeTab === 'For You' && !forYouHasMore && forYouPosts.length > 0) ||
+            (activeTab === 'Following' && !followingHasMore && followingPosts.length > 0) ||
+            (activeTab === 'Trending' && !trendingHasMore && trendingPosts.length > 0) ? (
+              <p className="text-text-muted text-xs font-dmmono">You're all caught up</p>
+            ) : null
+          )}
+        </div>
+      )}
       {isMobile && <button onClick={() => setShowCreateModal(true)} className="fixed bottom-20 right-4 w-13 h-13 rounded-full bg-brand-cyan flex items-center justify-center z-30 hover:brightness-110 active:scale-95 transition-all shadow-black/30"><Icon name="add" size={26} className="text-bg-dark" /></button>}
       {showCreateModal && <CreatePostModal onClose={() => setShowCreateModal(false)} />}
+      {newsVideoViewer && (
+        <NewsVideoViewer
+          items={newsVideoViewer.items}
+          startIndex={newsVideoViewer.index}
+          onClose={() => setNewsVideoViewer(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Full-screen video viewer for news videos.
+ * X/Twitter-style: swipe/scroll to next video, video controls, info overlay.
+ */
+function NewsVideoViewer({ items, startIndex, onClose }) {
+  const [index, setIndex] = useState(startIndex);
+  const containerRef = useRef(null);
+  const touchStartY = useRef(0);
+  const item = items[index];
+
+  const goNext = useCallback(() => { if (index < items.length - 1) setIndex(i => i + 1); }, [index, items.length]);
+  const goPrev = useCallback(() => { if (index > 0) setIndex(i => i - 1); }, [index]);
+
+  useEffect(() => {
+    const handleKey = (e) => {
+      if (e.key === 'ArrowDown' || e.key === 'j') goNext();
+      else if (e.key === 'ArrowUp' || e.key === 'k') goPrev();
+      else if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [goNext, goPrev, onClose]);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    let wheelTimeout;
+    const handleWheel = (e) => {
+      e.preventDefault();
+      clearTimeout(wheelTimeout);
+      wheelTimeout = setTimeout(() => {
+        if (e.deltaY > 30) goNext();
+        else if (e.deltaY < -30) goPrev();
+      }, 100);
+    };
+    el.addEventListener('wheel', handleWheel, { passive: false });
+    return () => el.removeEventListener('wheel', handleWheel);
+  }, [goNext, goPrev]);
+
+  if (!item) return null;
+
+  const embedUrl = `https://www.youtube-nocookie.com/embed/${item.youtubeVideoId}?autoplay=1&controls=1&modestbranding=1&rel=0&playsinline=1`;
+
+  return (
+    <div
+      ref={containerRef}
+      className="fixed inset-0 z-[100] bg-black select-none flex flex-col"
+      onTouchStart={(e) => { touchStartY.current = e.touches[0].clientY; }}
+      onTouchEnd={(e) => {
+        const delta = touchStartY.current - e.changedTouches[0].clientY;
+        if (Math.abs(delta) > 60) { delta > 0 ? goNext() : goPrev(); }
+      }}
+    >
+      {/* Top bar */}
+      <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-4 pt-4 pb-8 bg-gradient-to-b from-black/60 to-transparent">
+        <button onClick={onClose} className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center">
+          <Icon name="arrow_back" size={22} className="text-white" />
+        </button>
+        <span className="text-white/60 text-xs font-dmmono">{index + 1} / {items.length}</span>
+      </div>
+
+      {/* Video iframe - full controls in fullscreen mode */}
+      <div className="flex-1 flex items-center justify-center relative">
+        <iframe
+          key={item.youtubeVideoId}
+          src={embedUrl}
+          className="w-full h-full max-h-[80vh] pointer-events-auto"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+          allowFullScreen
+          frameBorder="0"
+          title={item.title}
+        />
+        {/* Swipe/scroll overlay — left and right edges catch swipes without blocking video controls */}
+        <div
+          className="absolute left-0 top-0 bottom-0 w-16 z-20"
+          onTouchStart={(e) => { touchStartY.current = e.touches[0].clientY; }}
+          onTouchEnd={(e) => {
+            const delta = touchStartY.current - e.changedTouches[0].clientY;
+            if (Math.abs(delta) > 60) { delta > 0 ? goNext() : goPrev(); }
+          }}
+        />
+        <div
+          className="absolute right-0 top-0 bottom-0 w-16 z-20"
+          onTouchStart={(e) => { touchStartY.current = e.touches[0].clientY; }}
+          onTouchEnd={(e) => {
+            const delta = touchStartY.current - e.changedTouches[0].clientY;
+            if (Math.abs(delta) > 60) { delta > 0 ? goNext() : goPrev(); }
+          }}
+        />
+        {/* Prev/Next nav buttons (desktop + as tap targets) */}
+        {index > 0 && (
+          <button
+            onClick={goPrev}
+            className="absolute top-1/2 left-2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/80 transition"
+          >
+            <Icon name="keyboard_arrow_up" size={24} />
+          </button>
+        )}
+        {index < items.length - 1 && (
+          <button
+            onClick={goNext}
+            className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 w-10 h-10 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/80 transition"
+          >
+            <Icon name="keyboard_arrow_down" size={24} />
+          </button>
+        )}
+      </div>
+
+      {/* Bottom info */}
+      <div className="absolute bottom-0 left-0 right-0 z-10 px-4 pb-6 bg-gradient-to-t from-black/70 via-black/30 to-transparent">
+        <div className="flex items-center gap-2.5 mb-2">
+          <div className="w-9 h-9 rounded-full overflow-hidden bg-surface-2 flex items-center justify-center border border-white/[0.08]">
+            {item.avatar ? <img src={item.avatar} alt="" className="w-full h-full object-cover" /> : <span className="text-sm">📰</span>}
+          </div>
+          <div>
+            <p className="text-white font-bold text-sm">{item.source}</p>
+            <p className="text-white/50 text-xs font-dmmono">@{item.source?.toLowerCase().replace(/[^a-z0-9]/g, '')}</p>
+          </div>
+        </div>
+        <h3 className="text-white font-syne font-bold text-sm leading-snug line-clamp-2">{item.title}</h3>
+        <a href={item.link} target="_blank" rel="noopener noreferrer" className="text-brand-cyan text-xs font-semibold mt-1 inline-block hover:underline">
+          Read full article →
+        </a>
+      </div>
+
+      {/* Scroll hint */}
+      {index === 0 && items.length > 1 && (
+        <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-10">
+          <Icon name="keyboard_arrow_up" size={28} className="text-white/40" />
+        </div>
+      )}
     </div>
   );
 }
