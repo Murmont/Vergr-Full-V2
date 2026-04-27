@@ -10,9 +10,11 @@ import UserAvatar from '../../components/UserAvatar';
 import PostCard from '../../components/PostCard';
 import TopBar from '../../components/TopBar';
 import Icon from '../../components/Icon';
+import { CoinIcon } from '../../components/CoinIcon';
 import TierBadge from '../../components/TierBadge';
 import VPLevelBadge from '../../components/VPLevelBadge';
 import { getVPLevel, getVPProgress, getNextVPLevel } from '../../utils/vpSystem';
+import { trackEvent } from '../../utils/trackEvent';
 
 export default function PublicProfileScreen() {
   const { id } = useParams();
@@ -45,6 +47,9 @@ export default function PublicProfileScreen() {
         if (!u) u = await getUserByUsername(id);
         if (u) {
           setUser(u);
+          if (currentUser?.uid && u.id !== currentUser.uid) {
+            trackEvent('profile_visit', { authorId: u.id, target: 'user' });
+          }
           const [userPosts, isFollow, walletData] = await Promise.all([
             getUserPosts(u.id, 20),
             currentUser ? checkFollowing(currentUser.uid, u.id) : false,
@@ -69,7 +74,10 @@ export default function PublicProfileScreen() {
     setUser(prev => ({ ...prev, followerCount: (prev.followerCount || 0) + change }));
     try {
       if (wasFollowing) await unfollowUser(currentUser.uid, user.id);
-      else await followUser(currentUser.uid, user.id);
+      else {
+        await followUser(currentUser.uid, user.id);
+        trackEvent('creator_follow', { authorId: user.id });
+      }
     } catch (err) {
       setFollowing(wasFollowing);
       setUser(prev => ({ ...prev, followerCount: (prev.followerCount || 0) - change }));
@@ -126,7 +134,7 @@ export default function PublicProfileScreen() {
   const actionButtons = !isMe && (
     <div className="flex gap-2">
       {!isBot && <button onClick={handleMessage} className="w-10 h-10 rounded-full bg-surface-2 border border-white/[0.06] flex items-center justify-center hover:bg-surface-3 transition-colors"><Icon name="chat_bubble" size={18} /></button>}
-      {!isBot && <button onClick={() => navigate('/wallet')} className="w-10 h-10 rounded-full bg-brand-gold/10 border border-brand-gold/20 flex items-center justify-center hover:bg-brand-gold/20 transition-colors"><Icon name="paid" size={18} className="text-brand-gold" /></button>}
+      {!isBot && <button onClick={() => navigate('/wallet')} className="w-10 h-10 rounded-full bg-brand-gold/10 border border-brand-gold/20 flex items-center justify-center hover:bg-brand-gold/20 transition-colors"><CoinIcon size={18} /></button>}
       <motion.button
         onClick={handleFollowToggle}
         disabled={toggling}
@@ -210,7 +218,7 @@ export default function PublicProfileScreen() {
         {!isMe && (
           <div className="flex gap-2 pb-1">
             {!isBot && <button onClick={handleMessage} className="w-10 h-10 rounded-full bg-surface-2 border border-white/[0.06] flex items-center justify-center"><Icon name="chat_bubble" size={18} /></button>}
-            {!isBot && <button onClick={() => navigate('/wallet')} className="w-10 h-10 rounded-full bg-brand-gold/10 border border-brand-gold/20 flex items-center justify-center"><Icon name="paid" size={18} className="text-brand-gold" /></button>}
+            {!isBot && <button onClick={() => navigate('/wallet')} className="w-10 h-10 rounded-full bg-brand-gold/10 border border-brand-gold/20 flex items-center justify-center"><CoinIcon size={18} /></button>}
             <motion.button onClick={handleFollowToggle} disabled={toggling}
               whileTap={{ scale: 0.92 }}
               transition={{ type: 'spring', stiffness: 500, damping: 25 }}

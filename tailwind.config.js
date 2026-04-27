@@ -1,77 +1,104 @@
 /** @type {import('tailwindcss').Config} */
+//
+// VERGR design tokens — single source of truth.
+// Touching these here cascades to every Tailwind class across the app.
+//
+// Token map (after the global redesign):
+//   bg-dark        →  page background
+//   surface-1      →  primary card / panel surface
+//   surface-2      →  elevated surface (card-hover, sub-panels)
+//   surface-3      →  highest elevation, also used as divider on dark bg
+//   border-accent  →  subtle divider line
+//   text-primary   →  pure white headings + numbers
+//   text-secondary →  dim grey body text
+//   text-muted     →  muted grey labels / captions
+//
+// Brand palette (matches Claude Design wallet/profile mocks):
+//   brand-violet         #7B1FFF   →  primary brand, active states
+//   brand-violet-light   #B44FFF   →  light violet for accents/hover/badges
+//   brand-cyan           #4DFFD4   →  chat / fresh accent (kept for legacy + chat)
+//   brand-pink           #C87FFF   →  highlight / mixed gradients
+//   brand-gold           #F0A500   →  coins / earnings
+//   brand-gold-light     #F5C842   →  bright coin accents (numbers, glow)
+//   brand-ember          #F04060   →  destructive / live red
+//   gem-blue             #3D7FFF   →  gems (NEW — never the same as brand-cyan)
+//   success-green        #22D17E   →  online dot, success state, gain
+//
 export default {
   content: ['./index.html', './src/**/*.{js,jsx}'],
   darkMode: 'class',
   safelist: [
-    'w-[340px]',   // force include this class for dynamic use
+    'w-[340px]',
   ],
   theme: {
     extend: {
       colors: {
-        'brand-cyan': '#4DFFD4',
-        'brand-violet': '#7B6FFF',
-        'brand-pink': '#C87FFF',
-        'brand-gold': '#F5C542',
-        'brand-ember': '#FF4D6A',
-        'bg-dark': '#07080D',
-        'surface-1': '#0F1118',
-        'surface-2': '#161922',
-        'surface-3': '#1D2130',
-        'border-accent': '#232640',
-        'text-primary': '#ECEFFE',
-        'text-secondary': '#9BA1C0',
-        'text-muted': '#6B7194',
+        // ── Brand ──
+        'brand-cyan':         '#4DFFD4',
+        'brand-violet':       '#7B1FFF',
+        'brand-violet-light': '#B44FFF',
+        'brand-pink':         '#C87FFF',
+        'brand-gold':         '#F0A500',
+        'brand-gold-light':   '#F5C842',
+        'brand-ember':        '#F04060',
+        'gem-blue':           '#3D7FFF',
+        'success-green':      '#22D17E',
+
+        // ── Surfaces ──
+        'bg-dark':       '#0B0B14',
+        'surface-1':     '#14141F',
+        'surface-2':     '#1A1A2A',
+        'surface-3':     '#1E1E2E',
+        'border-accent': '#2A2A3E',
+
+        // ── Text ──
+        'text-primary':   '#FFFFFF',
+        'text-secondary': '#9CA3AF',
+        'text-muted':     '#6B7280',
+
+        // ── Social ──
         'discord': '#5865F2',
-        'twitch': '#9146FF',
+        'twitch':  '#9146FF',
         'youtube': '#FF0000',
-        'steam': '#1B2838',
+        'steam':   '#1B2838',
       },
       fontFamily: {
-        syne: ['Syne', 'sans-serif'],
+        syne:   ['Syne', 'sans-serif'],
         dmsans: ['DM Sans', 'sans-serif'],
         dmmono: ['DM Mono', 'monospace'],
       },
       backgroundImage: {
-        'brand-gradient': 'linear-gradient(135deg, #4DFFD4 0%, #7B6FFF 50%, #C87FFF 100%)',
-        'cta-gradient': 'linear-gradient(135deg, #7B6FFF 0%, #C87FFF 100%)',
-        'gold-gradient': 'linear-gradient(135deg, #F5C542 0%, #D4A017 100%)',
-        'ember-gradient': 'linear-gradient(135deg, #FF4D6A 0%, #FF2D55 100%)',
-        'dark-gradient': 'linear-gradient(180deg, #07080D 0%, #0F1118 100%)',
-        'card-gradient': 'linear-gradient(135deg, rgba(77,255,212,0.08) 0%, rgba(123,111,255,0.08) 100%)',
-        'holographic': 'linear-gradient(135deg, #4DFFD4 0%, #7B6FFF 25%, #C87FFF 50%, #F5C542 75%, #4DFFD4 100%)',
+        // Gradients used throughout the app — adjusted to match the new violet-forward palette.
+        'brand-gradient':   'linear-gradient(135deg, #4DFFD4 0%, #7B1FFF 50%, #C87FFF 100%)',
+        'cta-gradient':     'linear-gradient(135deg, #6D28D9 0%, #7C3AED 100%)',  // primary buttons (Go Live etc.)
+        'gold-gradient':    'linear-gradient(135deg, #F5C842 0%, #F0A500 100%)',
+        'ember-gradient':   'linear-gradient(135deg, #F04060 0%, #FF2D55 100%)',
+        'gem-gradient':     'linear-gradient(135deg, #3D7FFF 0%, #1E40AF 100%)',
+        'dark-gradient':    'linear-gradient(180deg, #0B0B14 0%, #14141F 100%)',
+        'card-gradient':    'linear-gradient(135deg, rgba(123,31,255,0.08) 0%, rgba(180,79,255,0.06) 100%)',
+        'banner-gradient':  'linear-gradient(135deg, #0d0820 0%, #1a0a3a 30%, #2d0a5a 60%, #1a0a30 100%)',
+        'holographic':      'linear-gradient(135deg, #4DFFD4 0%, #7B1FFF 25%, #C87FFF 50%, #F5C842 75%, #4DFFD4 100%)',
       },
       borderRadius: { custom: '14px' },
       animation: {
         'pulse-glow': 'pulseGlow 2s ease-in-out infinite',
-        'slide-up': 'slideUp 0.3s ease-out',
+        'slide-up':   'slideUp 0.3s ease-out',
         'slide-down': 'slideDown 0.3s ease-out',
-        'fade-in': 'fadeIn 0.3s ease-out',
-        'spin-slow': 'spin 3s linear infinite',
-        'shimmer': 'shimmer 2s linear infinite',
-        float: 'float 3s ease-in-out infinite',
+        'fade-in':    'fadeIn 0.3s ease-out',
+        'spin-slow':  'spin 3s linear infinite',
+        'shimmer':    'shimmer 2s linear infinite',
+        'float':      'float 3s ease-in-out infinite',
       },
       keyframes: {
         pulseGlow: {
-          '0%, 100%': { boxShadow: '0 0 20px rgba(77,255,212,0.15)' },
-          '50%': { boxShadow: '0 0 40px rgba(77,255,212,0.3)' },
+          '0%, 100%': { boxShadow: '0 0 20px rgba(123,31,255,0.18)' },
+          '50%':      { boxShadow: '0 0 40px rgba(180,79,255,0.32)' },
         },
-        slideUp: {
-          '0%': { transform: 'translateY(20px)', opacity: '0' },
-          '100%': { transform: 'translateY(0)', opacity: '1' },
-        },
-        slideDown: {
-          '0%': { transform: 'translateY(-20px)', opacity: '0' },
-          '100%': { transform: 'translateY(0)', opacity: '1' },
-        },
-        fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
-        shimmer: {
-          '0%': { backgroundPosition: '-200% 0' },
-          '100%': { backgroundPosition: '200% 0' },
-        },
-        float: {
-          '0%, 100%': { transform: 'translateY(0)' },
-          '50%': { transform: 'translateY(-10px)' },
-        },
+        slideUp:   { '0%': { transform: 'translateY(20px)',  opacity: '0' }, '100%': { transform: 'translateY(0)', opacity: '1' } },
+        slideDown: { '0%': { transform: 'translateY(-20px)', opacity: '0' }, '100%': { transform: 'translateY(0)', opacity: '1' } },
+        fadeIn:    { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
+        shimmer:   { '0%': { backgroundPosition: '-200% 0' }, '100%': { backgroundPosition: '200% 0' } },
+        float:     { '0%, 100%': { transform: 'translateY(0)' }, '50%': { transform: 'translateY(-10px)' } },
       },
     },
   },

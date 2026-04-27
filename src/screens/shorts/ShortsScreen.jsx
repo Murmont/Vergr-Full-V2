@@ -10,6 +10,7 @@ import UserAvatar from '../../components/UserAvatar';
 import Icon from '../../components/Icon';
 import { getEmbedUrl } from '../../components/EmbedVideoPlayer';
 import { timeAgo } from '../../utils/helpers';
+import { trackEvent } from '../../utils/trackEvent';
 
 export default function ShortsScreen() {
   const { currentUser } = useAuth();
@@ -70,6 +71,22 @@ export default function ShortsScreen() {
 
   const current = shorts[currentIndex];
 
+  // Track "short_watched" after 1.5s on a short (consent-gated inside trackEvent)
+  useEffect(() => {
+    if (!current?.id) return;
+    const t = setTimeout(() => {
+      trackEvent('short_watched', {
+        postId: current.id,
+        authorId: current.authorId || current.userId,
+        contentType: 'short',
+        tags: current.tags?.slice?.(0, 5),
+        gameId: current.gameId,
+        source: 'shorts',
+      });
+    }, 1500);
+    return () => clearTimeout(t);
+  }, [current?.id]);
+
   const goNext = useCallback(() => {
     if (currentIndex < shorts.length - 1) setCurrentIndex(p => p + 1);
   }, [currentIndex, shorts.length]);
@@ -125,6 +142,7 @@ export default function ShortsScreen() {
       try {
         await navigator.share({ title: post.content?.slice(0, 50) || 'Check this on VERGR', url });
         incrementShareCount(post.id).catch(() => {});
+        trackEvent('share', { postId: post.id, authorId: post.authorId || post.userId, contentType: 'short', tags: post.tags?.slice?.(0, 5), gameId: post.gameId });
       } catch {}
     } else {
       try {
@@ -220,7 +238,7 @@ export default function ShortsScreen() {
           count={current.likeCount}
           active={current.isLiked}
           activeColor="text-brand-ember"
-          onTap={() => { if (currentUser) toggleLike?.(current.id, currentUser.uid); }}
+          onTap={() => { if (currentUser) { toggleLike?.(current.id, currentUser.uid); trackEvent('like', { postId: current.id, authorId: current.authorId || current.userId, contentType: 'short', tags: current.tags?.slice?.(0, 5), gameId: current.gameId }); } }}
         />
         <EngageBtn icon="chat_bubble" count={current.commentCount} onTap={() => navigate(`/post/${current.id}`)} />
         <EngageBtn icon="bookmark" count={current.saveCount} />

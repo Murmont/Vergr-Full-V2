@@ -1048,13 +1048,12 @@ export const approveServiceOrder = async (orderId, buyerId) => {
     if (order.buyerId !== buyerId) throw new Error('Not your order');
     if (order.status !== 'delivered') throw new Error('Order not delivered yet');
 
-    const commission = order.sellerCommission || 0.30;
-    const gemsEarned = Math.round(order.priceCoins * (1 - commission));
+    const coinsEarned = order.priceCoins;
 
-    // Pay seller in gems
+    // Pay seller in COINS (full amount). Commission applies later on coin→gem conversion.
     tx.update(doc(db, 'wallets', order.sellerId), {
-      gems: increment(gemsEarned),
-      totalGemsEarned: increment(gemsEarned),
+      balance: increment(coinsEarned),
+      totalEarned: increment(coinsEarned),
       vp: increment(30), // VP for completing a service
     });
 
@@ -1066,16 +1065,16 @@ export const approveServiceOrder = async (orderId, buyerId) => {
     });
 
     tx.set(doc(collection(db, 'transactions')), {
-      userId: order.sellerId, type: 'service_earned', amount: gemsEarned, currency: 'gems',
-      description: `Service completed: ${order.title} (${Math.round((1 - commission) * 100)}% rate)`,
+      userId: order.sellerId, type: 'service_earned', amount: coinsEarned, currency: 'coins',
+      description: `Service completed: ${order.title}`,
       orderId, createdAt: serverTimestamp(),
     });
 
     tx.set(doc(collection(db, 'notifications')), {
       recipientId: order.sellerId, type: 'coins',
-      title: `+${gemsEarned} gems earned!`,
+      title: `+${coinsEarned} coins earned!`,
       body: `Service approved: ${order.title}`,
-      read: false, data: { amount: gemsEarned, type: 'service_earned' }, createdAt: serverTimestamp(),
+      read: false, data: { amount: coinsEarned, type: 'service_earned' }, createdAt: serverTimestamp(),
     });
   });
 };
@@ -1455,8 +1454,26 @@ export const setSquadChatBackground = async (squadId, type, value) => {
 // WALLET OPERATIONS
 // ═══════════════════════════════════════════
 
-// Tip/send coins → recipient receives GEMS (not coins)
-// Sender pays X coins. Platform takes commission. Recipient gets gems.
+// Convert coins → gems via the server callable (Phase 3). The callable
+// enforces rate limits, idempotency, and writes the platform commission
+// ledger. Signature kept the same so existing callers don't need to change.
+export const convertCoinsToGems = async (uid, amount) => {
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error('Invalid conversion amount');
+  }
+  const { httpsCallable } = await import('firebase/functions');
+  const { functions: fns } = await import('./config');
+  const fn = httpsCallable(fns, 'convertCoinsToGems');
+  // Idempotency key — prevents double-debit if the network blips
+  const idempotencyKey = (typeof crypto !== 'undefined' && crypto.randomUUID)
+    ? crypto.randomUUID()
+    : `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  const res = await fn({ amount, idempotencyKey });
+  return res.data;
+};
+
+// Tip/send coins → recipient receives COINS at full amount.
+// Commission only applies later, when the recipient converts coins → gems.
 export const sendCoins = async (fromUid, toUid, amount, desc = '') => {
   const fromWalletRef = doc(db, 'wallets', fromUid);
   const toWalletRef = doc(db, 'wallets', toUid);
@@ -1467,16 +1484,8 @@ export const sendCoins = async (fromUid, toUid, amount, desc = '') => {
     if (!fromSnap.exists()) throw new Error('Wallet not found');
     if (fromSnap.data().balance < amount) throw new Error('Insufficient balance');
 
-    // Calculate gems based on recipient's VP level
-    const recipientVP = toSnap.exists() ? (toSnap.data().vp || 0) : 0;
-    // Import dynamically would be complex in firestore.js — inline the commission lookup
-    const commissionRates = [0.30, 0.28, 0.25, 0.22, 0.20, 0.18, 0.15];
-    const vpThresholds = [0, 500, 2000, 5000, 15000, 40000, 100000];
-    let commission = 0.30;
-    for (let i = vpThresholds.length - 1; i >= 0; i--) {
-      if (recipientVP >= vpThresholds[i]) { commission = commissionRates[i]; break; }
-    }
-    const gemsEarned = Math.round(amount * (1 - commission));
+    // Tips credit the recipient with COINS (in-app currency) at full amount.
+    // Commission only applies later, when the recipient converts coins → gems.
 
     // Deduct coins from sender
     transaction.update(fromWalletRef, {
@@ -1486,29 +1495,30 @@ export const sendCoins = async (fromUid, toUid, amount, desc = '') => {
       updatedAt: serverTimestamp(),
     });
 
-    // Give gems to recipient
+    // Credit coins to recipient (full amount, no split)
     transaction.update(toWalletRef, {
-      gems: increment(gemsEarned),
-      totalGemsEarned: increment(gemsEarned),
+      balance: increment(amount),
+      totalEarned: increment(amount),
       vp: increment(5), // bonus VP for receiving a tip
       updatedAt: serverTimestamp(),
     });
 
     transaction.set(doc(collection(db, 'transactions')), {
       userId: fromUid, recipientId: toUid, type: 'tip_sent',
-      amount: -amount, description: desc || 'Sent tip', createdAt: serverTimestamp(),
+      amount: -amount, currency: 'coins',
+      description: desc || 'Sent tip', createdAt: serverTimestamp(),
     });
     transaction.set(doc(collection(db, 'transactions')), {
       userId: toUid, senderId: fromUid, type: 'tip_received',
-      amount: gemsEarned, currency: 'gems',
-      description: `Received ${gemsEarned} gems from tip (${Math.round((1 - commission) * 100)}% rate)`,
+      amount, currency: 'coins',
+      description: desc ? `Tip received: ${desc}` : 'Received a tip',
       createdAt: serverTimestamp(),
     });
     transaction.set(doc(collection(db, 'notifications')), {
       recipientId: toUid, type: 'coins',
-      title: `+${gemsEarned} gems received!`,
+      title: `+${amount} coins received!`,
       body: desc || 'Someone tipped you',
-      read: false, data: { amount: gemsEarned, type: 'tip_received' }, createdAt: serverTimestamp(),
+      read: false, data: { amount, type: 'tip_received' }, createdAt: serverTimestamp(),
     });
   });
 };
@@ -1699,13 +1709,40 @@ export const getTournaments = async (status = null, limitCount = 20) => {
   return snap.docs.map(d => ({ id: d.id, ...d.data() }));
 };
 
-export const createTournament = async (adminId, squadId, { name, game, entryFee, maxParticipants, type }) => {
+export const createTournament = async (adminId, squadId, payload) => {
+  const {
+    name, game, entryFee, maxParticipants, type,
+    mode = 'solo', streamRequired = false,
+    brGameCount = null, swissRounds = null,
+  } = payload;
   const tournamentRef = await addDoc(collection(db, 'tournaments'), {
-    adminId, squadId, name, game, entryFee, maxParticipants, type,
-    status: 'open', prizePool: 0, participants: [],
+    adminId, squadId: squadId || null,
+    name, game,
+    entryFee: entryFee || 0,
+    maxParticipants,
+    type,
+    mode,
+    streamRequired,
+    brGameCount,
+    swissRounds,
+    status: 'open',
+    prizePool: 0,
+    participants: [],
+    bracketData: null,
+    brResults: [],
     createdAt: serverTimestamp(),
   });
   return tournamentRef.id;
+};
+
+// Append a Battle Royale game's placement results. results = [{ playerId, place }]
+export const submitBRGameResults = async (tournamentId, gameId, results) => {
+  const tournamentRef = doc(db, 'tournaments', tournamentId);
+  const payload = (results || []).map(r => ({ ...r, gameId }));
+  await updateDoc(tournamentRef, {
+    brResults: arrayUnion(...payload),
+    updatedAt: serverTimestamp(),
+  });
 };
 
 export const submitRoundResult = async (matchId, currentRound, winnerId, loserId) => {
@@ -1898,9 +1935,36 @@ export const startTournament = async (tournamentId, adminId) => {
     batch.set(matchRef, { ...match, createdAt: serverTimestamp() });
   });
 
+  // Generate typed bracketData based on tournament.type
+  let bracketData = null;
+  try {
+    const mod = await import('../utils/tournamentTypes.js');
+    const players = participants.map((uid, i) => ({ id: uid, playerId: uid, name: uid, seed: i + 1 }));
+    if (t.type === 'single_elim' || t.type === 'squad_single_elim' || !t.type) {
+      bracketData = mod.generateSingleElim(players);
+    } else if (t.type === 'double_elim') {
+      bracketData = mod.generateDoubleElim(players);
+    } else if (t.type === 'squad_round_robin') {
+      bracketData = mod.generateRoundRobin(players);
+    } else if (t.type === 'swiss') {
+      const first = mod.generateSwissRound(
+        players.map(p => ({ ...p, wins: 0, losses: 0, pastOpponents: [] })),
+        1
+      );
+      bracketData = { rounds: [first] };
+    } else if (t.type === 'battle_royale') {
+      bracketData = { gameCount: t.brGameCount || 3 };
+    } else if (t.type === 'invitational') {
+      bracketData = { rounds: [], custom: true };
+    }
+  } catch (err) {
+    console.error('Bracket generation failed', err);
+  }
+
   batch.update(tournamentRef, {
     status: 'active',
     bracket: { totalRounds: Math.ceil(Math.log2(participants.length)), currentRound: 1 },
+    bracketData,
     startedAt: serverTimestamp(),
   });
 
@@ -2050,7 +2114,7 @@ const advanceBracket = async (tournamentId, completedRound) => {
 
 // Prize distribution: coins → gems conversion
 // Entry fees paid in coins. Winners receive gems. Platform keeps commission.
-// Commission based on each winner's VP level (30% Rookie → 15% Mythic)
+// Commission based on each winner's VP level (30% at L1 → 10% at L100 Immortal)
 export const distributePrizePool = async (tournamentId) => {
   const tournamentRef = doc(db, 'tournaments', tournamentId);
   const snap = await getDoc(tournamentRef);
@@ -2077,35 +2141,30 @@ export const distributePrizePool = async (tournamentId) => {
   const awardPrize = async (userId, coinAllocation, placement) => {
     if (!userId || coinAllocation <= 0) return;
 
-    // Get winner's VP for commission rate
-    const walletSnap = await getDoc(doc(db, 'wallets', userId));
-    const vp = walletSnap.exists() ? (walletSnap.data().vp || 0) : 0;
-    const commission = getCommission(vp);
-    const gemsEarned = Math.round(coinAllocation * (1 - commission));
-
-    // Squad contribution: 10% of gems
+    // Squad contribution: 10% of the coin prize goes to the squad wallet.
     let squadCut = 0;
-    let netGems = gemsEarned;
+    let netCoins = coinAllocation;
     if (squadId) {
-      squadCut = Math.floor(gemsEarned * 0.10);
-      netGems = gemsEarned - squadCut;
+      squadCut = Math.floor(coinAllocation * 0.10);
+      netCoins = coinAllocation - squadCut;
     }
 
+    // Pay winner in COINS at full amount. Commission applies later on conversion.
     batch.update(doc(db, 'wallets', userId), {
-      gems: increment(netGems),
-      totalGemsEarned: increment(netGems),
+      balance: increment(netCoins),
+      totalEarned: increment(netCoins),
       vp: increment(placement === '1st' ? 200 : placement === '2nd' ? 100 : 50),
     });
     batch.set(doc(collection(db, 'transactions')), {
-      userId, type: 'tournament_prize', amount: netGems, currency: 'gems',
-      description: `${placement} place: ${t.name} (${Math.round((1 - commission) * 100)}% rate)${squadCut > 0 ? ` · ${squadCut} to squad` : ''}`,
+      userId, type: 'tournament_prize', amount: netCoins, currency: 'coins',
+      description: `${placement} place: ${t.name}${squadCut > 0 ? ` · ${squadCut} to squad` : ''}`,
       tournamentId, createdAt: serverTimestamp(),
     });
     batch.set(doc(collection(db, 'notifications')), {
       recipientId: userId, type: 'coins',
-      title: `+${netGems} gems — ${placement} place!`,
+      title: `+${netCoins} coins — ${placement} place!`,
       body: `Prize from ${t.name}`,
-      read: false, data: { amount: netGems, tournamentId, type: 'tournament_prize' },
+      read: false, data: { amount: netCoins, tournamentId, type: 'tournament_prize' },
       createdAt: serverTimestamp(),
     });
 
@@ -2123,26 +2182,21 @@ export const distributePrizePool = async (tournamentId) => {
     for (const uid of placements.third) await awardPrize(uid, splits.third, '3rd');
   }
 
-  // Mod fee → gems for the mod
+  // Mod fee → coins for the mod (full amount, no commission)
   if (t.adminId && modFee > 0) {
-    const modWallet = await getDoc(doc(db, 'wallets', t.adminId));
-    const modVP = modWallet.exists() ? (modWallet.data().vp || 0) : 0;
-    const modCommission = getCommission(modVP);
-    const modGems = Math.round(modFee * (1 - modCommission));
-
     batch.update(doc(db, 'wallets', t.adminId), {
-      gems: increment(modGems),
-      totalGemsEarned: increment(modGems),
+      balance: increment(modFee),
+      totalEarned: increment(modFee),
       vp: increment(30),
     });
     batch.set(doc(collection(db, 'transactions')), {
-      userId: t.adminId, type: 'mod_payout', amount: modGems, currency: 'gems',
+      userId: t.adminId, type: 'mod_payout', amount: modFee, currency: 'coins',
       description: `Moderator fee: ${t.name}`, tournamentId, createdAt: serverTimestamp(),
     });
     batch.set(doc(collection(db, 'notifications')), {
       recipientId: t.adminId, type: 'coins',
-      title: `+${modGems} gems — moderator fee`,
-      body: `For running ${t.name}`, read: false, data: { amount: modGems, type: 'mod_payout' }, createdAt: serverTimestamp(),
+      title: `+${modFee} coins — moderator fee`,
+      body: `For running ${t.name}`, read: false, data: { amount: modFee, type: 'mod_payout' }, createdAt: serverTimestamp(),
     });
   }
 

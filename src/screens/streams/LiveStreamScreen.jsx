@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Icon from '../../components/Icon';
+import { CoinIcon } from '../../components/CoinIcon';
 import UserAvatar from '../../components/UserAvatar';
 import { useLayout } from '../../context/LayoutContext';
 import useResponsive from '../../hooks/useResponsive';
@@ -101,7 +102,7 @@ export default function LiveStreamScreen() {
         {/* Chat input */}
         <div className="p-3 border-t border-white/[0.03] flex items-center gap-2">
           <button className="w-9 h-9 rounded-full bg-brand-gold/10 flex items-center justify-center shrink-0">
-            <Icon name="paid" size={18} className="text-brand-gold" />
+            <CoinIcon size={18} />
           </button>
           <input type="text" placeholder="Send a message..." value={chatInput} onChange={e => setChatInput(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && send()}

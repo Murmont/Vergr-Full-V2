@@ -30,7 +30,7 @@ export default function NewsPostCard({ item, onOpenVideo }) {
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25, ease: [0.25, 0.1, 0.25, 1] }}
-      className="max-w-[560px] mx-auto border-b border-white/[0.04] hover:bg-surface-1/30 transition-colors"
+      className="w-full border-b border-white/[0.04] hover:bg-surface-1/30 transition-colors"
     >
       <div className="px-4 py-4">
         <div className="flex items-start gap-3">
@@ -98,11 +98,11 @@ export default function NewsPostCard({ item, onOpenVideo }) {
                 onClickFullscreen={() => onOpenVideo?.(item)}
               />
             ) : hasImage ? (
-              <div className="mt-3 rounded-2xl overflow-hidden border border-white/[0.06]">
+              <div className="mt-3 rounded-2xl overflow-hidden border border-white/[0.06] aspect-video bg-black">
                 <img
                   src={item.thumbnail}
                   alt=""
-                  className="w-full h-auto max-h-[400px] object-cover"
+                  className="w-full h-full object-cover"
                   loading="lazy"
                   onError={() => setImgError(true)}
                 />

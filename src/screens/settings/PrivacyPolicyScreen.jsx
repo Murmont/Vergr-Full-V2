@@ -23,7 +23,7 @@ export default function PrivacyPolicyScreen() {
   ];
   return (
     <div className={isDesktop ? "min-h-screen flex flex-col" : "screen-container min-h-screen flex flex-col"}>
-      <header className="flex items-center gap-3 px-5 pt-12 pb-4"><button onClick={()=>navigate(-1)} className="text-white/80"><Icon name="arrow-left" size={24}/></button><h1 className="text-white font-syne font-bold text-lg">Privacy Policy</h1></header>
+      <header className="flex items-center gap-3 px-5 pt-12 pb-4"><button onClick={()=>navigate(-1)} className="text-white/80"><Icon name="arrow_back" size={24}/></button><h1 className="text-white font-syne font-bold text-lg">Privacy Policy</h1></header>
       <main className="flex-1 px-5 pb-8 overflow-y-auto">
         <p className="text-text-secondary text-xs mb-6">Last updated: March 2026</p>
         {sections.map(s=>(

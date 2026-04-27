@@ -1,4 +1,4 @@
-import { HashRouter as BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter as BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { AuthProvider } from '../context/AuthContext';
 import { UserProvider } from '../context/UserContext';
 import { NotificationProvider } from '../context/NotificationContext';
@@ -11,10 +11,15 @@ import IncomingCallOverlay from '../components/IncomingCallOverlay';
 import AdminAnnounceScreen from '../screens/admin/AdminAnnounceScreen';
 import DesktopNotificationManager from '../components/DesktopNotificationManager';
 import NotificationsDrawer from '../components/NotificationsDrawer';
+import ConsentSheet from '../components/ConsentSheet';
+import { captureSignals } from '../utils/captureSignals';
+import { setTrackingUser } from '../utils/trackEvent';
+import { useAuth } from '../context/AuthContext';
 import MainLayout from '../layouts/MainLayout';
 import MessagesMasterDetail from '../layouts/MessagesMasterDetail';
 import SquadsMasterDetail from '../layouts/SquadsMasterDetail';
 import ResponsiveLayout from '../components/ResponsiveLayout';
+import LoadingScreen from '../components/LoadingScreen';
 import usePresence from '../hooks/usePresence';
 import { useEffect } from 'react';
 import { checkScheduledBackup } from '../utils/chatBackup';
@@ -37,6 +42,23 @@ function BackupChecker() {
   return null;
 }
 
+// Renders nothing — captures GDPR-lawful passive signals once per session
+function SignalsCapture() {
+  const { currentUser } = useAuth();
+  useEffect(() => {
+    setTrackingUser(currentUser?.uid || null);
+    if (currentUser?.uid) captureSignals(currentUser.uid).catch(() => {});
+  }, [currentUser?.uid]);
+  return null;
+}
+
+function RootRoute() {
+  const { currentUser, loading } = useAuth();
+  if (loading) return <LoadingScreen />;
+  if (!currentUser) return <LandingScreen />;
+  return <HomeFeedScreen />;
+}
+
 // Auth
 import SplashScreen from '../screens/auth/SplashScreen';
 import LoginScreen from '../screens/auth/LoginScreen';
@@ -53,6 +75,13 @@ import ResetSuccessScreen from '../screens/auth/ResetSuccessScreen';
 import SocialLoginScreen from '../screens/auth/SocialLoginScreen';
 import AccountTypeScreen from '../screens/auth/AccountTypeScreen';
 import ConnectGamingScreen from '../screens/auth/ConnectGamingScreen';
+import {
+  LandingScreen,
+  StoreScreen,
+  DownloadScreen,
+  HelpScreen as MarketingHelpScreen,
+  LegalScreen,
+} from '../screens/marketing/PublicMarketingScreens';
 
 // Onboarding
 import OnboardingScreen from '../screens/onboarding/OnboardingScreen';
@@ -132,6 +161,7 @@ import InviteMembersScreen from '../screens/squads/InviteMembersScreen';
 
 // Wallet & Coins
 import WalletScreen from '../screens/wallet/WalletScreen';
+import ConvertCoinsScreen from '../screens/wallet/ConvertCoinsScreen';
 import BuyCoinsScreen from '../screens/wallet/BuyCoinsScreen';
 import TransactionReceiptScreen from '../screens/wallet/TransactionReceiptScreen';
 import TransactionFiltersScreen from '../screens/wallet/TransactionFiltersScreen';
@@ -141,15 +171,36 @@ import WalletSecurityScreen from '../screens/wallet/WalletSecurityScreen';
 
 // Creator
 import CreatorDashboardScreen from '../screens/creator/CreatorDashboardScreen';
+import CreatorEarningsScreen from '../screens/creator/CreatorEarningsScreen';
+import CreatorContentScreen from '../screens/creator/CreatorContentScreen';
+import CreatorScheduleScreen from '../screens/creator/CreatorScheduleScreen';
+import CreatorAudienceScreen from '../screens/creator/CreatorAudienceScreen';
+import CreatorCommunityScreen from '../screens/creator/CreatorCommunityScreen';
 import MonthlyAnalyticsScreen from '../screens/creator/MonthlyAnalyticsScreen';
 import CreatorQuestsScreen from '../screens/creator/CreatorQuestsScreen';
 import MembershipTiersScreen from '../screens/creator/MembershipTiersScreen';
 import CreatorVerificationScreen from '../screens/creator/CreatorVerificationScreen';
+import { useParams } from 'react-router-dom';
+function MobileKycHandoff() {
+  const { sid } = useParams();
+  return (
+    <div className="min-h-screen bg-bg-dark px-4 py-6">
+      <div className="max-w-xl mx-auto">
+        <h1 className="font-syne text-white font-bold text-xl mb-1">VERGR Verification</h1>
+        <p className="text-text-muted text-xs mb-4">Continuing session · {sid.slice(0, 6)}…</p>
+        <CreatorVerificationScreen embedded sessionId={sid} />
+      </div>
+    </div>
+  );
+}
 import VerificationPendingScreen from '../screens/creator/VerificationPendingScreen';
+import CreatorLayout from '../components/creator/CreatorLayout';
 
 // Streams
 import GoLiveSetupScreen from '../screens/streams/GoLiveSetupScreen';
 import LiveStreamScreen from '../screens/streams/LiveStreamScreen';
+import BroadcasterScreen from '../screens/streams/BroadcasterScreen';
+import ViewerStreamScreen from '../screens/streams/ViewerStreamScreen';
 import StreamAnalyticsScreen from '../screens/streams/StreamAnalyticsScreen';
 import StreamEndingScreen from '../screens/streams/StreamEndingScreen';
 import StreamModerationScreen from '../screens/streams/StreamModerationScreen';
@@ -192,6 +243,8 @@ import CallsScreen from '../screens/calls/CallsScreen';
 import StatusScreen from '../screens/status/StatusScreen';
 import PrivacyPolicyScreen from '../screens/settings/PrivacyPolicyScreen';
 import PhoneAllowListScreen from '../screens/settings/PhoneAllowListScreen';
+import SubscriptionScreen from '../screens/settings/SubscriptionScreen';
+import VPRanksScreen from '../screens/settings/VPRanksScreen';
 
 // Ad Center
 import AdCenterScreen from '../screens/ad/AdCenterScreen';
@@ -222,6 +275,18 @@ import ActivityLogScreen from '../screens/utility/ActivityLogScreen';
   } catch { /* SSR / private-mode — ignore */ }
 })();
 
+// Firebase Hosting serves the SPA for clean URLs like /store. HashRouter
+// needs those paths moved into the hash before React routes mount.
+(function bridgeCleanUrlsToHashRoutes() {
+  try {
+    if (typeof window === 'undefined') return;
+    const { pathname, search, hash } = window.location;
+    if (hash || pathname === '/' || pathname.includes('.')) return;
+    if (pathname.startsWith('/media/') || pathname.startsWith('/share/')) return;
+    window.history.replaceState(null, '', `/#${pathname}${search || ''}`);
+  } catch { /* ignore */ }
+})();
+
 export default function AppRouter() {
   return (
     <BrowserRouter>
@@ -237,9 +302,18 @@ export default function AppRouter() {
                   <DesktopNotificationManager />
                   <PresenceManager />
                   <BackupChecker />
+                  <SignalsCapture />
+                  <ConsentSheet />
                   <NotificationsDrawer />
                   <Routes>
                     {/* ---------- PUBLIC ROUTES (no layout) ---------- */}
+                    <Route path="/" element={<RootRoute />} />
+                    <Route path="/store" element={<StoreScreen />} />
+                    <Route path="/download" element={<DownloadScreen />} />
+                    <Route path="/help" element={<MarketingHelpScreen />} />
+                    <Route path="/privacy" element={<LegalScreen type="privacy" />} />
+                    <Route path="/terms" element={<LegalScreen type="terms" />} />
+
                     {/* Auth */}
                     <Route path="/splash" element={<SplashScreen />} />
                     <Route path="/login" element={<LoginScreen />} />
@@ -277,7 +351,6 @@ export default function AppRouter() {
                     {/* ---------- PROTECTED MAIN APP (with MainLayout) ---------- */}
                     <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
                       {/* Main tabs */}
-                      <Route path="/" element={<HomeFeedScreen />} />
                       <Route path="/explore" element={<ExploreScreen />} />
                       <Route path="/profile" element={<ProfileScreen />} />
 
@@ -330,6 +403,7 @@ export default function AppRouter() {
 
                       {/* Wallet & Coins */}
                       <Route path="/wallet" element={<WalletScreen />} />
+                      <Route path="/wallet/convert" element={<ConvertCoinsScreen />} />
                       <Route path="/wallet/security" element={<WalletSecurityScreen />} />
                       <Route path="/buy-coins" element={<BuyCoinsScreen />} />
                       <Route path="/transaction/:txId" element={<TransactionReceiptScreen />} />
@@ -337,18 +411,16 @@ export default function AppRouter() {
                       <Route path="/request-payout" element={<RequestPayoutScreen />} />
                       <Route path="/payout-success" element={<PayoutSuccessScreen />} />
 
-                      {/* Creator */}
-                      <Route path="/creator/dashboard" element={<CreatorDashboardScreen />} />
-                      <Route path="/creator/analytics" element={<MonthlyAnalyticsScreen />} />
-                      <Route path="/creator/quests" element={<CreatorQuestsScreen />} />
-                      <Route path="/creator/membership" element={<MembershipTiersScreen />} />
-                      <Route path="/creator/verify" element={<CreatorVerificationScreen />} />
                       <Route path="/verification-pending" element={<VerificationPendingScreen />} />
 
                       {/* Streams */}
                       <Route path="/go-live" element={<GoLiveSetupScreen />} />
                       <Route path="/go-live/co-stream" element={<CoStreamingScreen />} />
                       <Route path="/stream/:streamId" element={<LiveStreamScreen />} />
+                      <Route path="/broadcast" element={<BroadcasterScreen />} />
+                      <Route path="/broadcast/:streamId" element={<BroadcasterScreen />} />
+                      <Route path="/watch" element={<ViewerStreamScreen />} />
+                      <Route path="/watch/:streamId" element={<ViewerStreamScreen />} />
                       <Route path="/stream/:streamId/moderation" element={<StreamModerationScreen />} />
                       <Route path="/stream/analytics" element={<StreamAnalyticsScreen />} />
                       <Route path="/stream/ended" element={<StreamEndingScreen />} />
@@ -385,6 +457,8 @@ export default function AppRouter() {
                       <Route path="/settings/help" element={<HelpCenterScreen />} />
                       <Route path="/settings/how-it-works" element={<HowItWorksScreen />} />
                       <Route path="/settings/phone-allowlist" element={<PhoneAllowListScreen />} />
+                      <Route path="/settings/subscription" element={<SubscriptionScreen />} />
+                      <Route path="/settings/ranks" element={<VPRanksScreen />} />
 
                       {/* Boost */}
                       <Route path="/boost" element={<BoostScreen />} />
@@ -395,8 +469,8 @@ export default function AppRouter() {
                       {/* Status */}
                       <Route path="/status" element={<StatusScreen />} />
 
-                      {/* Ad Center - NEW */}
-                      <Route path="/ad-center" element={<AdCenterScreen />} />
+                      {/* Ad Center — moved into Creator Studio. Redirect legacy URL. */}
+                      <Route path="/ad-center" element={<Navigate to="/creator/ads" replace />} />
 
                       <Route path="/settings/privacy-policy" element={<PrivacyPolicyScreen />} />
 
@@ -414,6 +488,25 @@ export default function AppRouter() {
                       {/* Vergr.me Editor — Pro user only, protected */}
                       <Route path="/vergrme/edit" element={<VergrMeEditorScreen />} />
                     </Route>
+
+                    {/* ---------- CREATOR STUDIO (own layout — sidebar + topbar) ---------- */}
+                    <Route element={<ProtectedRoute><Outlet /></ProtectedRoute>}>
+                      <Route path="/creator" element={<Navigate to="/creator/dashboard" replace />} />
+                      <Route path="/creator/dashboard"  element={<CreatorDashboardScreen />} />
+                      <Route path="/creator/earnings"   element={<CreatorEarningsScreen />} />
+                      <Route path="/creator/content"    element={<CreatorContentScreen />} />
+                      <Route path="/creator/schedule"   element={<CreatorScheduleScreen />} />
+                      <Route path="/creator/audience"   element={<CreatorAudienceScreen />} />
+                      <Route path="/creator/community"  element={<CreatorCommunityScreen />} />
+                      <Route path="/creator/analytics"  element={<CreatorLayout page="analytics" title="Analytics" subtitle="Deep dive into your performance" requiredTier="lite" lockDescription="Detailed monthly analytics with growth, engagement and revenue breakdowns. Upgrade to Lite to unlock."><MonthlyAnalyticsScreen embedded /></CreatorLayout>} />
+                      <Route path="/creator/quests"     element={<CreatorLayout page="quests" title="Creator Quests" subtitle="Earn VP — level up your creator rank"><CreatorQuestsScreen embedded /></CreatorLayout>} />
+                      <Route path="/creator/membership" element={<CreatorLayout page="memberships" title="Membership Tiers" subtitle="Offer paid perks to your fans" requiredTier="pro" lockDescription="Build paid tiers with perks, Discord roles and monthly earnings caps. Upgrade to Pro to enable."><MembershipTiersScreen embedded /></CreatorLayout>} />
+                      <Route path="/creator/ads"        element={<CreatorLayout page="ads" title="Ad Center" subtitle="Run targeted in-feed campaigns"><AdCenterScreen embedded /></CreatorLayout>} />
+                      <Route path="/creator/verify"     element={<CreatorLayout page="verify" title="Creator Verification" subtitle="Identity check — required for Ad Center, payouts and membership tiers"><CreatorVerificationScreen embedded /></CreatorLayout>} />
+                    </Route>
+
+                    {/* Mobile hand-off route for QR-code verification continuation */}
+                    <Route path="/verify/mobile/:sid" element={<ProtectedRoute><MobileKycHandoff /></ProtectedRoute>} />
 
                     {/* ---------- MESSAGES MASTER‑DETAIL ---------- */}
                     <Route path="/messages" element={<ProtectedRoute><MessagesMasterDetail /></ProtectedRoute>}>

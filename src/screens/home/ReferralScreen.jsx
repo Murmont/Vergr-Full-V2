@@ -16,8 +16,8 @@ const claimQuestReward = httpsCallable(functions, 'claimQuestReward');
 /**
  * Shows the user's invite link, who has signed up via them, and whether each
  * invitee has completed the funnel (phone added + joined a squad or
- * subscribed). Claim button per eligible invitee — 3000 VP for the referrer,
- * 5000 VP auto-paid to the invitee.
+ * subscribed). Claim button per eligible invitee — 5000 VP for the referrer,
+ * 3000 VP auto-paid to the invitee.
  */
 export default function ReferralScreen() {
   const { isDesktop, isMobile } = useResponsive();
@@ -107,9 +107,9 @@ export default function ReferralScreen() {
     if (!friend.eligible || claimedFriendIds.has(friend.uid)) return;
     setClaiming(friend.uid);
     try {
-      await claimQuestReward({ questId: 'refer_friend', reward: 3000, friendId: friend.uid, title: `Referred ${friend.displayName || friend.username}` });
+      await claimQuestReward({ questId: 'refer_friend', reward: 5000, friendId: friend.uid, title: `Referred ${friend.displayName || friend.username}` });
       setClaimedFriendIds(prev => new Set([...prev, friend.uid]));
-      showToast('+3000 VP — your friend got +5000 VP too!', 'success');
+      showToast('+5000 VP — your friend got +3000 VP too!', 'success');
     } catch (err) {
       showToast(err?.message || 'Could not claim', 'error');
     } finally {
@@ -138,9 +138,9 @@ export default function ReferralScreen() {
           </div>
           <p className="text-white text-sm leading-relaxed mb-3">
             When your friend signs up via this link, adds their phone number, and joins a squad or subscribes to Lite/Pro —
-            <span className="text-brand-cyan font-bold"> you earn 3000 VP </span>
+            <span className="text-brand-cyan font-bold"> you earn 5000 VP </span>
             and
-            <span className="text-brand-cyan font-bold"> they earn 5000 VP</span>.
+            <span className="text-brand-cyan font-bold"> they earn 3000 VP</span>.
           </p>
           <div className="flex items-center gap-2 bg-surface-2 rounded-xl px-3 py-2 mb-3">
             <Icon name="link" size={16} className="text-text-muted shrink-0" />
@@ -193,7 +193,7 @@ export default function ReferralScreen() {
                         disabled={claiming === f.uid}
                         className="px-3 py-1.5 rounded-full bg-brand-gold text-bg-dark text-xs font-bold hover:brightness-110 active:scale-95 transition-all shrink-0"
                       >
-                        {claiming === f.uid ? '...' : 'Claim 3000 VP'}
+                        {claiming === f.uid ? '...' : 'Claim 5000 VP'}
                       </button>
                     ) : (
                       <span className="text-text-muted text-xs shrink-0">Pending</span>

@@ -191,6 +191,18 @@ service firebase.storage {
       allow write: if isAuth() && isMediaFile() && isUnder(15);
     }
 
+    // ═══════════════════════════════════════════
+    // KYC ENCRYPTED DOCUMENTS — user writes own ciphertext, cannot read back.
+    // Reviewer access flows exclusively through Cloud Functions using the
+    // service account (admin SDK), which bypasses these rules.
+    // ═══════════════════════════════════════════
+    match /kyc-secure/{userId}/{fileName} {
+      allow create: if isOwner(userId)
+        && request.resource.contentType == 'application/octet-stream'
+        && isUnder(10);
+      allow read, update, delete: if false;
+    }
+
     // Deny everything else
     match /{allPaths=**} {
       allow read, write: if false;

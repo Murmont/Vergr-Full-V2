@@ -48,38 +48,22 @@ export default function ResponsiveLayout({
 
   // PROFESSIONAL LAYOUT (Home Feed) – with inner container for borders
   if (isDesktop && layout === 'professional' && rightPanel) {
-    const leftMargin = sidebarCollapsed ? '72px' : '260px';
+    const leftMargin = sidebarCollapsed ? '72px' : '240px';
     return (
       <div className="flex min-h-screen bg-bg-dark">
         <DesktopSidebar />
         <div style={{ marginLeft: leftMargin }} className="flex-1 py-4">
           <div className="flex justify-center">
-            {sidebarCollapsed ? (
-              <div className="flex gap-0">
-                {/* Outer feed container: width and shadow */}
-                <div className="w-[600px] bg-surface-1 shadow-xl shadow-black/30 overflow-visible">
-                  {/* Inner container: left/right borders and padding */}
-                  <div className="border-x border-white/10">
-                    {children}
-                  </div>
+            <div className="flex gap-0">
+              <div className="w-[620px] bg-surface-1 shadow-xl shadow-black/30 overflow-visible">
+                <div className="border-x border-white/10">
+                  {children}
                 </div>
-                <DiscoveryStrip />
-                <aside className="w-[260px] shrink-0 py-4 sticky top-0 h-screen overflow-y-auto no-scrollbar">
-                  {rightPanel}
-                </aside>
               </div>
-            ) : (
-              <div className="flex gap-0">
-                <div className="w-[600px] bg-surface-1 shadow-xl shadow-black/30 overflow-visible">
-                  <div className="border-x border-white/10">
-                    {children}
-                  </div>
-                </div>
-                <aside className="w-[260px] shrink-0 py-4 sticky top-0 h-screen overflow-y-auto no-scrollbar border-l border-white/[0.06]">
-                  {rightPanel}
-                </aside>
-              </div>
-            )}
+              <aside className="w-[340px] shrink-0 sticky top-0 h-screen overflow-y-auto no-scrollbar border-l border-white/[0.06] bg-bg-dark py-4">
+                {rightPanel}
+              </aside>
+            </div>
           </div>
         </div>
         {notifButton}
@@ -89,7 +73,7 @@ export default function ResponsiveLayout({
 
   // STANDARD DESKTOP LAYOUT (other pages)
   if (isDesktop) {
-    const sidebarWidth = sidebarCollapsed ? '72px' : '260px';
+    const sidebarWidth = sidebarCollapsed ? '72px' : '240px';
     if (centered) {
       return (
         <div className="flex min-h-screen bg-bg-dark">
@@ -161,9 +145,10 @@ export default function ResponsiveLayout({
   }
 
   // Mobile
+  const immersivePath = typeof window !== 'undefined' && /^\/(broadcast|watch|shorts|call)(\/|$)/.test(window.location.pathname);
   return (
     <div className="min-h-screen bg-bg-dark">
-      <div className="max-w-[480px] mx-auto min-h-screen relative pb-20">
+      <div className={`max-w-[480px] mx-auto min-h-screen relative ${immersivePath ? '' : 'pb-20'}`}>
         {children}
         <BottomNav />
       </div>

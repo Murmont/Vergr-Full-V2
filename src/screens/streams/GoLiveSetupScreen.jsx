@@ -3,8 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { useUI } from '../../context/UIContext';
 import TopBar from '../../components/TopBar';
 import Icon from '../../components/Icon';
+import { CoinIcon } from '../../components/CoinIcon';
 import { useLayout } from '../../context/LayoutContext';
 import useResponsive from '../../hooks/useResponsive';
+import BroadcasterScreen from './BroadcasterScreen';
+import ViewerStreamScreen from './ViewerStreamScreen';
 
 const PLATFORMS = [
   { id: 'twitch', name: 'Twitch', icon: '📺', color: '#9146FF', connected: false, username: '' },
@@ -31,6 +34,7 @@ export default function GoLiveSetupScreen() {
   const [enableTips, setEnableTips] = useState(true);
   const { showToast } = useUI();
   const navigate = useNavigate();
+  const [previewMode, setPreviewMode] = useState(null); // 'broadcaster' | 'viewer' | null
 
   const togglePlatform = (id) => {
     const platform = PLATFORMS.find(p => p.id === id);
@@ -49,6 +53,30 @@ export default function GoLiveSetupScreen() {
     showToast("You're now LIVE! 🔴", 'success');
     navigate('/');
   };
+
+  // Inline preview overlays — no routing required
+  if (previewMode === 'broadcaster') {
+    return (
+      <div className="relative">
+        <button onClick={() => setPreviewMode(null)}
+          className="fixed top-4 right-4 z-50 px-3 py-2 rounded-full bg-brand-ember text-white text-xs font-bold flex items-center gap-1.5 shadow-lg">
+          <Icon name="close" size={14} /> Exit Preview
+        </button>
+        <BroadcasterScreen />
+      </div>
+    );
+  }
+  if (previewMode === 'viewer') {
+    return (
+      <div className="relative">
+        <button onClick={() => setPreviewMode(null)}
+          className="fixed top-4 right-4 z-50 px-3 py-2 rounded-full bg-brand-ember text-white text-xs font-bold flex items-center gap-1.5 shadow-lg">
+          <Icon name="close" size={14} /> Exit Preview
+        </button>
+        <ViewerStreamScreen />
+      </div>
+    );
+  }
 
   return (
     <div className={isDesktop ? "min-h-screen pb-8" : "screen-container min-h-screen pb-8"}>
@@ -129,7 +157,7 @@ export default function GoLiveSetupScreen() {
 
           <div className="flex items-center justify-between p-4 rounded-2xl bg-surface-1 border border-white/[0.06]">
             <div className="flex items-center gap-3">
-              <Icon name="paid" size={22} className="text-brand-gold" />
+              <CoinIcon size={22} />
               <div>
                 <p className="text-sm font-semibold">Tips & Donations</p>
                 <p className="text-xs text-text-muted">Allow viewers to tip with coins</p>
@@ -148,6 +176,21 @@ export default function GoLiveSetupScreen() {
           <div className="w-3 h-3 bg-white rounded-full animate-pulse" />
           Go Live
         </button>
+
+        {/* Preview mode links */}
+        <div className="mt-3 p-3 rounded-2xl bg-surface-1 border border-dashed border-white/[0.1]">
+          <p className="text-text-muted text-[10px] uppercase tracking-widest font-bold mb-2">Preview (no broadcast)</p>
+          <div className="grid grid-cols-2 gap-2">
+            <button onClick={() => setPreviewMode('broadcaster')}
+              className="py-2.5 rounded-xl bg-surface-2 border border-white/[0.06] text-text-secondary text-xs font-bold hover:text-text-primary flex items-center justify-center gap-1.5">
+              <Icon name="videocam" size={14} /> Broadcaster View
+            </button>
+            <button onClick={() => setPreviewMode('viewer')}
+              className="py-2.5 rounded-xl bg-surface-2 border border-white/[0.06] text-text-secondary text-xs font-bold hover:text-text-primary flex items-center justify-center gap-1.5">
+              <Icon name="visibility" size={14} /> Viewer View
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -4,9 +4,14 @@ import useResponsive from '../hooks/useResponsive';
 import DesktopSidebar from '../components/DesktopSidebar';
 import BottomNav from '../components/BottomNav';
 import SquadsListPanel from '../components/SquadsListPanel';
-import RightSidebarPanel from '../components/RightSidebarPanel';
+import SquadInfoRail from '../components/brand/SquadInfoRail';
 import { useLayout } from '../context/LayoutContext';
 
+// On /squads (index) we render the redesigned full-width Find Squad screen
+// without the legacy 360px squad list panel (the new design owns its own
+// list + right rail).
+// On /squads/:squadId/* we keep the old master/detail layout: left list +
+// main content. The new SquadChat redesign owns its own right rail.
 export default function SquadsMasterDetail() {
   const { isDesktop } = useResponsive();
   const matchSquad = useMatch('/squads/:squadId/*');
@@ -28,38 +33,30 @@ export default function SquadsMasterDetail() {
     );
   }
 
+  // Full-width Find Squad index (new design owns its own right rail)
+  if (!matchSquad) {
+    return (
+      <div className="min-h-screen bg-bg-dark">
+        <DesktopSidebar />
+        <div className="ml-[240px]">
+          <Outlet />
+        </div>
+      </div>
+    );
+  }
+
+  // Squad detail / chat / settings — keep master/detail
   return (
     <div className="h-screen bg-bg-dark overflow-hidden">
       <DesktopSidebar />
-      <div className="h-full ml-[260px] flex">
-        {/* Left panel – fixed width, scrollable list of squads */}
-        <div className="w-[360px] h-full border-r border-white/[0.06] flex flex-col">
+      <div className="h-full ml-[240px] flex">
+        <div className="w-[300px] h-full border-r border-white/[0.06] flex flex-col">
           <SquadsListPanel />
         </div>
-
-        {/* Main content – fills remaining space */}
-        <div className="flex-1 h-full flex flex-col overflow-y-auto">
-          {matchSquad ? (
-            <Outlet />
-          ) : (
-            <div className="flex items-center justify-center h-full text-text-muted">
-              <div className="text-center">
-                <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-surface-2 flex items-center justify-center">
-                  <span className="text-4xl">🎮</span>
-                </div>
-                <h3 className="text-lg font-bold text-text-primary mb-2">Select a squad</h3>
-                <p className="text-sm">Choose a squad from the left panel to view details</p>
-              </div>
-            </div>
-          )}
+        <div className="flex-1 h-full flex flex-col overflow-y-auto min-w-0">
+          <Outlet />
         </div>
-
-        {/* Right sidebar – only if no squad selected */}
-        {!matchSquad && (
-          <div className="hidden xl:block w-[340px] h-full border-l border-white/[0.06] overflow-y-auto no-scrollbar">
-            <RightSidebarPanel />
-          </div>
-        )}
+        <SquadInfoRail />
       </div>
     </div>
   );

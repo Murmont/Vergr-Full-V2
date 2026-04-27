@@ -10,12 +10,26 @@ import PostCard from '../../components/PostCard';
 import RightSidebarPanel from '../../components/RightSidebarPanel';
 import { useLayout } from '../../context/LayoutContext';
 import { timeAgo } from '../../utils/helpers';
+import { trackEvent } from '../../utils/trackEvent';
 
 const CATEGORIES = ['All', 'Creators', 'Squads', 'Streams', 'Clips', 'News'];
 
 export default function ExploreScreen() {
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
+
+  // Debounced search tracking — only log after the user stops typing for 900ms
+  useEffect(() => {
+    if (!search || search.trim().length < 2) return;
+    const t = setTimeout(() => trackEvent('search', { query: search.trim().slice(0, 80) }), 900);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  useEffect(() => {
+    if (activeCategory && activeCategory !== 'All') {
+      trackEvent('tag_click', { target: activeCategory, source: 'explore_category' });
+    }
+  }, [activeCategory]);
   const [posts, setPosts] = useState([]);
   const [creators, setCreators] = useState([]);
   const [squads, setSquads] = useState([]);

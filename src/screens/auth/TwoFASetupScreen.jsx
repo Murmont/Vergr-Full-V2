@@ -33,7 +33,7 @@ export default function TwoFASetupScreen() {
   return (
     <div className="screen-container min-h-screen">
       <header className="flex items-center justify-between px-5 pt-12 pb-4">
-        <button onClick={() => step > 1 ? setStep(step - 1) : navigate(-1)} className="w-10 h-10 flex items-center justify-center text-white/80"><Icon name="arrow-left" size={24} /></button>
+        <button onClick={() => step > 1 ? setStep(step - 1) : navigate(-1)} className="w-10 h-10 flex items-center justify-center text-white/80"><Icon name="arrow_back" size={24} /></button>
         <button onClick={() => navigate(-1)} className="text-text-secondary text-sm font-semibold">Skip</button>
       </header>
       <main className="flex-1 flex flex-col px-6 pt-4 pb-8">

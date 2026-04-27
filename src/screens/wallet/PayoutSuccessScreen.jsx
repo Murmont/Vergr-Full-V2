@@ -28,7 +28,7 @@ export default function PayoutSuccessScreen() {
       {!isMobile && (
         <div className="absolute top-4 right-4">
           <button onClick={() => navigate(-1)} className="text-white/80 hover:text-white transition-colors" aria-label="Go back">
-            <Icon name="arrow-left" size={24} />
+            <Icon name="arrow_back" size={24} />
           </button>
         </div>
       )}

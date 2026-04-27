@@ -9,6 +9,36 @@ if (admin.apps.length === 0) admin.initializeApp();
 functions.setGlobalOptions({ region: 'europe-west1' });
 const db = getFirestore('vgrdb');
 
+// KYC module — exports its own callables and a purge helper.
+const kyc = require('./kyc');
+exports.reviewKyc = kyc.reviewKyc;
+exports.decideKyc = kyc.decideKyc;
+exports.scheduledKycRetention = kyc.scheduledKycRetention;
+
+// Economy — server-side coin→gem conversion + shared rate-limit helpers.
+const economy = require('./economy');
+exports.convertCoinsToGems = economy.convertCoinsToGems;
+
+// NOWPayments — coin purchases (invoices) + gem withdrawals (payouts).
+const np = require('./nowpayments');
+exports.createPurchaseInvoice  = np.createPurchaseInvoice;
+exports.nowpaymentsIpn         = np.nowpaymentsIpn;
+exports.getPayoutQuote         = np.getPayoutQuote;
+exports.confirmPayout          = np.confirmPayout;
+exports.listPayoutCurrencies   = np.listPayoutCurrencies;
+
+// ── PLAN ECONOMY (mirrors src/utils/tierSystem.js + vpSystem.js) ──
+const PLAN_VP_MULT = { free: 1, lite: 1.5, pro: 2 };
+const MONTHLY_VP_BONUS = { free: 0, lite: 1000, pro: 3000 };
+const MONTHLY_COIN_BONUS = { free: 0, lite: 50, pro: 150 };
+const applyVPMultiplier = (base, plan) => Math.round(base * (PLAN_VP_MULT[plan] || 1));
+const getUserPlan = async (uid) => {
+  try {
+    const snap = await db.collection('users').doc(uid).get();
+    return snap.exists ? (snap.data().tier || snap.data().plan || 'free') : 'free';
+  } catch { return 'free'; }
+};
+
 // ──────────────────────────────────────────────────────────────
 // 1. LINK PREVIEW
 // ──────────────────────────────────────────────────────────────
@@ -246,12 +276,13 @@ exports.claimDailyReward = functions.https.onCall(async (request) => {
       }
     }
 
+    const plan = walletSnap.exists ? (walletSnap.data().tier || 'free') : 'free';
     let reward = 0;
-    let vpReward = 10;
+    let vpReward = applyVPMultiplier(10, plan);
     let streakToSave = newStreak;
     if (newStreak >= 5) {
       reward = 5;
-      vpReward = 50;
+      vpReward = applyVPMultiplier(50, plan);
       streakToSave = 0;
     }
 
@@ -279,7 +310,7 @@ exports.claimDailyReward = functions.https.onCall(async (request) => {
 
     if (reward > 0) {
       tx.set(db.collection('transactions').doc(), {
-        userId: uid, type: 'daily_reward', amount: reward,
+        userId: uid, type: 'daily_reward', amount: reward, currency: 'coins',
         description: `5-day streak: +${reward} coins + ${vpReward} VP`, createdAt: now,
       });
       tx.set(db.collection('notifications').doc(), {
@@ -349,9 +380,8 @@ exports.claimQuestReward = functions.https.onCall(async (request) => {
     //      signup when the invitee lands via `?ref=<uid>`.
     //
     // Payouts:
-    //   • Referrer: +3000 VP
-    //   • Referred friend: +5000 VP (one-sided bonus, encourages the invitee
-    //     to actually complete the funnel)
+    //   • Referrer: +5000 VP (rewards the person who brought the user in)
+    //   • Referred friend: +3000 VP (welcome bonus to encourage completion)
     let referralFriendId = null;
     if (questId === 'refer_friend') {
       const { friendId } = request.data;
@@ -386,7 +416,7 @@ exports.claimQuestReward = functions.https.onCall(async (request) => {
       }
 
       // Override the reward sent by the client — server is the source of truth.
-      reward = 3000;
+      reward = 5000;
     }
 
     if (questId === 'creator_content') {
@@ -417,54 +447,58 @@ exports.claimQuestReward = functions.https.onCall(async (request) => {
       if (tourneysSnap.empty) throw new functions.https.HttpsError('failed-precondition', 'Enter a tournament first');
     }
 
-    // Pay out
+    // Pay out — quest rewards are VP ONLY (CLAUDE.md hard rule:
+    // "Creator quests award VP only — never coins"). Earlier versions of this
+    // function credited `balance` instead of `vp`; that was a bug.
     const walletSnap = await tx.get(walletRef);
-    const currentBalance = walletSnap.exists ? (walletSnap.data().balance || 0) : 0;
-    const currentEarned = walletSnap.exists ? (walletSnap.data().totalEarned || 0) : 0;
+    const currentVP = walletSnap.exists ? (walletSnap.data().vp || 0) : 0;
 
     if (walletSnap.exists) {
-      tx.update(walletRef, { balance: currentBalance + reward, totalEarned: currentEarned + reward, updatedAt: new Date() });
+      tx.update(walletRef, { vp: currentVP + reward, updatedAt: new Date() });
     } else {
       tx.set(walletRef, {
-        balance: reward, totalEarned: reward, totalSpent: 0, totalReceived: 0, totalTipped: 0,
-        tier: 'free', dailyStreak: 0, lastDailyCheckIn: null, createdAt: new Date(), updatedAt: new Date(),
+        balance: 0, gems: 0, vp: reward,
+        totalEarned: 0, totalSpent: 0, totalReceived: 0, totalTipped: 0,
+        tier: 'free', dailyStreak: 0, lastDailyCheckIn: null,
+        createdAt: new Date(), updatedAt: new Date(),
       });
     }
 
-    tx.set(claimRef, { userId: uid, questId, amount: reward, claimedAt: new Date(), ...(referralFriendId && { friendId: referralFriendId }) });
+    tx.set(claimRef, { userId: uid, questId, amount: reward, currency: 'vp', claimedAt: new Date(), ...(referralFriendId && { friendId: referralFriendId }) });
     tx.set(db.collection('transactions').doc(), {
-      userId: uid, type: 'quest_reward', amount: reward,
+      userId: uid, type: 'quest_reward', amount: reward, currency: 'vp',
       description: title || `Quest: ${questId}`, createdAt: new Date(),
     });
     tx.set(db.collection('notifications').doc(), {
       recipientId: uid, type: 'coins',
-      title: `+${reward} ${questId === 'refer_friend' ? 'VP' : 'coins'} earned!`,
+      title: `+${reward} VP earned!`,
       body: title || `Quest completed: ${questId}`,
-      read: false, data: { amount: reward, type: 'quest_reward' }, createdAt: new Date(),
+      read: false, data: { amount: reward, currency: 'vp', type: 'quest_reward' }, createdAt: new Date(),
     });
 
-    // refer_friend: also pay the invitee their 5000 VP bonus. Use a distinct
-    // claim doc so we don't double-pay if the referrer ever retries.
+    // refer_friend: also pay the invitee their 3000 VP welcome bonus. Use a
+    // distinct claim doc so we don't double-pay if the referrer ever retries.
     if (questId === 'refer_friend' && referralFriendId) {
-      const FRIEND_REWARD = 5000;
+      const FRIEND_REWARD = 3000; // VP, not coins
       const friendClaimRef = db.collection('quest_claims').doc(`${referralFriendId}_referred_bonus`);
       const friendClaimSnap = await tx.get(friendClaimRef);
       if (!friendClaimSnap.exists) {
         const friendWalletRef = db.collection('wallets').doc(referralFriendId);
         const friendWalletSnap = await tx.get(friendWalletRef);
-        const fBal = friendWalletSnap.exists ? (friendWalletSnap.data().balance || 0) : 0;
-        const fEarned = friendWalletSnap.exists ? (friendWalletSnap.data().totalEarned || 0) : 0;
+        const fVP = friendWalletSnap.exists ? (friendWalletSnap.data().vp || 0) : 0;
         if (friendWalletSnap.exists) {
-          tx.update(friendWalletRef, { balance: fBal + FRIEND_REWARD, totalEarned: fEarned + FRIEND_REWARD, updatedAt: new Date() });
+          tx.update(friendWalletRef, { vp: fVP + FRIEND_REWARD, updatedAt: new Date() });
         } else {
           tx.set(friendWalletRef, {
-            balance: FRIEND_REWARD, totalEarned: FRIEND_REWARD, totalSpent: 0, totalReceived: 0, totalTipped: 0,
-            tier: 'free', dailyStreak: 0, lastDailyCheckIn: null, createdAt: new Date(), updatedAt: new Date(),
+            balance: 0, gems: 0, vp: FRIEND_REWARD,
+            totalEarned: 0, totalSpent: 0, totalReceived: 0, totalTipped: 0,
+            tier: 'free', dailyStreak: 0, lastDailyCheckIn: null,
+            createdAt: new Date(), updatedAt: new Date(),
           });
         }
-        tx.set(friendClaimRef, { userId: referralFriendId, questId: 'referred_bonus', amount: FRIEND_REWARD, claimedAt: new Date(), referrerId: uid });
+        tx.set(friendClaimRef, { userId: referralFriendId, questId: 'referred_bonus', amount: FRIEND_REWARD, currency: 'vp', claimedAt: new Date(), referrerId: uid });
         tx.set(db.collection('transactions').doc(), {
-          userId: referralFriendId, type: 'quest_reward', amount: FRIEND_REWARD,
+          userId: referralFriendId, type: 'quest_reward', amount: FRIEND_REWARD, currency: 'vp',
           description: 'Referral bonus — thanks for joining!', createdAt: new Date(),
         });
         tx.set(db.collection('notifications').doc(), {
@@ -476,7 +510,7 @@ exports.claimQuestReward = functions.https.onCall(async (request) => {
       }
     }
 
-    return { reward, questId, friendReward: questId === 'refer_friend' ? 5000 : 0 };
+    return { reward, questId, friendReward: questId === 'refer_friend' ? 3000 : 0 };
   });
 });
 
@@ -650,11 +684,15 @@ exports.onPostLiked = functions.firestore
       const today = new Date().toISOString().slice(0, 10);
       const capRef = db.collection('wallets').doc(authorId).collection('daily_caps').doc(today);
       const capSnap = await capRef.get();
+      const authorPlan = await getUserPlan(authorId);
+      const likerPlan = await getUserPlan(likerId);
+      const authorVP = applyVPMultiplier(2, authorPlan);
+      const likerVP = applyVPMultiplier(1, likerPlan);
       if ((capSnap.exists ? (capSnap.data().likeVP || 0) : 0) < 40) {
-        await db.collection('wallets').doc(authorId).update({ vp: admin.firestore.FieldValue.increment(2) });
-        await capRef.set({ likeVP: admin.firestore.FieldValue.increment(2) }, { merge: true });
+        await db.collection('wallets').doc(authorId).update({ vp: admin.firestore.FieldValue.increment(authorVP) });
+        await capRef.set({ likeVP: admin.firestore.FieldValue.increment(authorVP) }, { merge: true });
       }
-      await db.collection('wallets').doc(likerId).update({ vp: admin.firestore.FieldValue.increment(1) }).catch(() => {});
+      await db.collection('wallets').doc(likerId).update({ vp: admin.firestore.FieldValue.increment(likerVP) }).catch(() => {});
 
       const liker = await db.collection('users').doc(likerId).get();
       const likerName = liker.exists ? (liker.data().displayName || 'Someone') : 'Someone';
@@ -671,34 +709,9 @@ exports.onPostLiked = functions.firestore
 // ──────────────────────────────────────────────────────────────
 // 6. MONTHLY TIER REWARDS (1st of month)
 // ──────────────────────────────────────────────────────────────
-exports.monthlyTierRewards = functions.scheduler
-  .onSchedule('0 0 1 * *', async () => {
-    const TIER_REWARDS = { lite: 10, pro: 30 };
-    for (const [tier, reward] of Object.entries(TIER_REWARDS)) {
-      const usersSnap = await db.collection('wallets').where('tier', '==', tier).get();
-      const batch = db.batch();
-      let count = 0;
-      for (const walletDoc of usersSnap.docs) {
-        batch.update(walletDoc.ref, {
-          balance: admin.firestore.FieldValue.increment(reward),
-          totalEarned: admin.firestore.FieldValue.increment(reward),
-        });
-        batch.set(db.collection('transactions').doc(), {
-          userId: walletDoc.id, type: 'tier_reward', amount: reward,
-          description: `Monthly ${tier.charAt(0).toUpperCase() + tier.slice(1)} reward`, createdAt: new Date(),
-        });
-        batch.set(db.collection('notifications').doc(), {
-          recipientId: walletDoc.id, type: 'coins',
-          title: `+${reward} monthly coins!`, body: `Your ${tier} tier reward`,
-          read: false, data: { amount: reward, type: 'tier_reward' }, createdAt: new Date(),
-        });
-        count++;
-        if (count % 200 === 0) await batch.commit();
-      }
-      if (count % 200 !== 0) await batch.commit();
-      console.log(`Distributed ${reward} coins to ${count} ${tier} users`);
-    }
-  });
+// [Removed] monthlyTierRewards — superseded by payMonthlyPlanBonus (see bottom of file).
+// The new function pays the updated amounts (50/150 coins + 1,000/3,000 VP) and is idempotent
+// via quest_claims/{uid}_plan_bonus_{YYYY-MM}.
 
 // ──────────────────────────────────────────────────────────────
 // 7. ADMIN ANNOUNCEMENT
@@ -1393,7 +1406,9 @@ exports.onUserDeleted = functionsV1.region('europe-west1').auth.user().onDelete(
     bio: '',
     email: null,
   });
-  console.log(`User deleted (soft): ${user.uid}`);
+  // GDPR Article 17 — erase KYC data + encrypted documents
+  await kyc.purgeKycForUser(user.uid);
+  console.log(`User deleted (soft) + KYC purged: ${user.uid}`);
 });
 
 // ──────────────────────────────────────────────────────────────
@@ -2339,3 +2354,570 @@ exports.serveMedia = functions.https.onRequest(async (req, res) => {
     if (!res.headersSent) res.status(500).send('Internal error');
   }
 });
+
+// ──────────────────────────────────────────────────────────────
+// MONTHLY PLAN BONUS — Lite/Pro subscribers get VP + coins on the 1st
+// ──────────────────────────────────────────────────────────────
+exports.payMonthlyPlanBonus = functions.scheduler.onSchedule(
+  { schedule: '0 6 1 * *', timeZone: 'UTC', region: 'europe-west1' },
+  async () => {
+    const monthKey = new Date().toISOString().slice(0, 7); // YYYY-MM
+    const plans = ['lite', 'pro'];
+    let paid = 0;
+
+    for (const plan of plans) {
+      const vpBonus = MONTHLY_VP_BONUS[plan];
+      const coinBonus = MONTHLY_COIN_BONUS[plan];
+      if (!vpBonus && !coinBonus) continue;
+
+      let lastDoc = null;
+      while (true) {
+        let q = db.collection('users').where('tier', '==', plan).limit(400);
+        if (lastDoc) q = q.startAfter(lastDoc);
+        const batch = await q.get();
+        if (batch.empty) break;
+        lastDoc = batch.docs[batch.docs.length - 1];
+
+        await Promise.all(batch.docs.map(async (userDoc) => {
+          const uid = userDoc.id;
+          const claimId = `${uid}_plan_bonus_${monthKey}`;
+          const claimRef = db.collection('quest_claims').doc(claimId);
+          const claimSnap = await claimRef.get();
+          if (claimSnap.exists) return;
+
+          const walletRef = db.collection('wallets').doc(uid);
+          const now = new Date();
+          try {
+            await db.runTransaction(async (tx) => {
+              const ws = await tx.get(walletRef);
+              const cur = ws.exists ? ws.data() : {};
+              tx.set(walletRef, {
+                balance: (cur.balance || 0) + coinBonus,
+                totalEarned: (cur.totalEarned || 0) + coinBonus,
+                vp: (cur.vp || 0) + vpBonus,
+                tier: plan,
+                updatedAt: now,
+                ...(!ws.exists ? { createdAt: now, gems: 0, totalSpent: 0 } : {}),
+              }, { merge: true });
+              tx.set(claimRef, { userId: uid, questId: 'plan_bonus', month: monthKey, plan, coins: coinBonus, vp: vpBonus, claimedAt: now });
+              tx.set(db.collection('transactions').doc(), {
+                userId: uid, type: 'plan_bonus', amount: coinBonus,
+                description: `${plan.toUpperCase()} monthly: +${coinBonus} coins + ${vpBonus} VP`,
+                createdAt: now,
+              });
+              tx.set(db.collection('notifications').doc(), {
+                recipientId: uid, type: 'coins',
+                title: `+${coinBonus} coins + ${vpBonus} VP`,
+                body: `Your ${plan.toUpperCase()} monthly bonus has landed!`,
+                read: false, data: { type: 'plan_bonus', plan, coins: coinBonus, vp: vpBonus }, createdAt: now,
+              });
+            });
+            paid++;
+          } catch (e) {
+            console.error(`plan_bonus failed for ${uid}:`, e.message);
+          }
+        }));
+
+        if (batch.docs.length < 400) break;
+      }
+    }
+
+    console.log(`payMonthlyPlanBonus ${monthKey}: paid ${paid} users`);
+    return null;
+  }
+);
+
+// ──────────────────────────────────────────────────────────────
+// GEMINI-BACKED MODERATION
+// Uses Gemini 1.5 Flash via REST (no SDK dep) with safety settings
+// to classify content. Free tier: 15 RPM / 1M TPM — more than enough
+// for chat + periodic stream frame checks at our current scale.
+// Set the API key with: firebase functions:secrets:set GEMINI_API_KEY
+// ──────────────────────────────────────────────────────────────
+const GEMINI_SECRET = functions.params.defineSecret('GEMINI_API_KEY');
+
+const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent';
+
+const SAFETY_SETTINGS = [
+  { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_LOW_AND_ABOVE' },
+  { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_LOW_AND_ABOVE' },
+  { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_LOW_AND_ABOVE' },
+  { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_LOW_AND_ABOVE' },
+];
+
+async function callGemini(apiKey, parts) {
+  try {
+    const res = await axios.post(`${GEMINI_ENDPOINT}?key=${apiKey}`, {
+      contents: [{ role: 'user', parts }],
+      safetySettings: SAFETY_SETTINGS,
+      generationConfig: { temperature: 0, maxOutputTokens: 16 },
+    }, { timeout: 8000 });
+    const data = res.data;
+    // If the prompt was blocked by safety, promptFeedback carries the reason.
+    if (data.promptFeedback?.blockReason) {
+      return { flagged: true, reason: data.promptFeedback.blockReason.toLowerCase(), raw: data };
+    }
+    // If a candidate came back with a safety block, candidates[].finishReason === 'SAFETY'
+    const candidate = data.candidates?.[0];
+    if (candidate?.finishReason === 'SAFETY') {
+      const worst = (candidate.safetyRatings || []).find(r => r.probability && r.probability !== 'NEGLIGIBLE');
+      return { flagged: true, reason: worst?.category?.toLowerCase() || 'safety', raw: data };
+    }
+    // Otherwise parse the model's Yes/No answer
+    const text = (candidate?.content?.parts?.[0]?.text || '').trim().toLowerCase();
+    return { flagged: text.startsWith('yes'), reason: text.startsWith('yes') ? 'flagged_by_model' : null, raw: data };
+  } catch (err) {
+    console.error('Gemini call failed:', err.response?.data || err.message);
+    // Fail-open: if Gemini is down we don't want to drop every message.
+    // The client-side rules already caught obvious violations.
+    return { flagged: false, reason: 'gemini_unavailable', error: true };
+  }
+}
+
+// Public callable — viewers call this before a message goes into Firestore.
+// Returns { ok, reason? }. Caller should block send if ok===false.
+exports.moderateMessage = functions.https.onCall(
+  { secrets: [GEMINI_SECRET], region: 'europe-west1' },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new functions.https.HttpsError('unauthenticated', 'Must be logged in');
+    const { text, chatId } = request.data || {};
+    if (typeof text !== 'string' || !text.trim()) {
+      throw new functions.https.HttpsError('invalid-argument', 'text required');
+    }
+    // Short-circuit very short messages — Gemini is overkill for "gg"
+    if (text.length < 12) return { ok: true, skipped: 'too_short' };
+
+    const apiKey = GEMINI_SECRET.value();
+    if (!apiKey) {
+      console.warn('GEMINI_API_KEY not set — moderation pass-through');
+      return { ok: true, skipped: 'no_api_key' };
+    }
+
+    const prompt = `Act as a content moderator for a gaming community chat. Is the following message toxic, hateful, harassing, or sexually explicit? Reply with only "Yes" or "No".\n\nMessage: ${text}`;
+    const result = await callGemini(apiKey, [{ text: prompt }]);
+
+    if (result.flagged) {
+      // Log to mod_actions for the streamer to review
+      await db.collection('mod_actions').add({
+        action: 'auto_block_chat',
+        targetType: 'chat_message',
+        targetUserId: uid,
+        chatId: chatId || null,
+        messageText: text.slice(0, 500),
+        reason: result.reason,
+        automated: true,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      }).catch(() => {});
+      return { ok: false, reason: result.reason || 'flagged' };
+    }
+    return { ok: true };
+  }
+);
+
+// Stream frame check — broadcaster client grabs a canvas frame every N seconds,
+// converts to base64 JPEG, and sends it here. Returns { ok, reason? }.
+// Repeated flags on the same streamId bump the offender's strike counter.
+exports.moderateStreamFrame = functions.https.onCall(
+  { secrets: [GEMINI_SECRET], region: 'europe-west1', timeoutSeconds: 30 },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new functions.https.HttpsError('unauthenticated', 'Must be logged in');
+    const { streamId, imageBase64, mimeType = 'image/jpeg' } = request.data || {};
+    if (!imageBase64) throw new functions.https.HttpsError('invalid-argument', 'imageBase64 required');
+
+    const apiKey = GEMINI_SECRET.value();
+    if (!apiKey) return { ok: true, skipped: 'no_api_key' };
+
+    // Strip data URL prefix if caller included it
+    const b64 = imageBase64.replace(/^data:[^;]+;base64,/, '');
+    const prompt = 'Act as a content moderator. Does this image contain sexually explicit content, nudity, or graphic violence? Reply with only "Yes" or "No".';
+    const result = await callGemini(apiKey, [
+      { text: prompt },
+      { inlineData: { mimeType, data: b64 } },
+    ]);
+
+    if (result.flagged) {
+      // Increment the broadcaster's strike counter; auto-kill at 3.
+      const strikeRef = db.collection('stream_strikes').doc(uid);
+      let strikes = 1;
+      await db.runTransaction(async (tx) => {
+        const snap = await tx.get(strikeRef);
+        strikes = (snap.data()?.count || 0) + 1;
+        tx.set(strikeRef, {
+          count: strikes,
+          lastStreamId: streamId || null,
+          lastReason: result.reason || 'flagged',
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+      });
+
+      await db.collection('mod_actions').add({
+        action: strikes >= 3 ? 'auto_kill_stream' : 'warn_stream',
+        targetType: 'live_stream',
+        targetUserId: uid,
+        streamId: streamId || null,
+        reason: result.reason || 'flagged',
+        strikeCount: strikes,
+        automated: true,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      if (streamId) {
+        await db.collection('streams').doc(streamId).set({
+          moderationStatus: strikes >= 3 ? 'killed' : 'warned',
+          moderationReason: result.reason || 'flagged',
+          moderationAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true }).catch(() => {});
+      }
+
+      return { ok: false, reason: result.reason || 'flagged', strikes, shouldKill: strikes >= 3 };
+    }
+    return { ok: true };
+  }
+);
+
+// Viewer-submitted report → creates a doc that mods can triage.
+exports.reportStream = functions.https.onCall(
+  { region: 'europe-west1' },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new functions.https.HttpsError('unauthenticated', 'Must be logged in');
+    const { streamId, reason, detail } = request.data || {};
+    if (!streamId || !reason) throw new functions.https.HttpsError('invalid-argument', 'streamId and reason required');
+    await db.collection('stream_reports').add({
+      streamId, reason, detail: detail || null, reporterId: uid,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      status: 'pending',
+    });
+    return { ok: true };
+  }
+);
+
+// ─────────────────────────────────────────────────────────────────────────
+// AUDIENCE DEMOGRAPHICS — GDPR-lawful passive signals + creator aggregates
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * getClientSignals
+ * Callable. Returns approximate country (and region/city when available)
+ * derived from the request IP using headers set by upstream CDNs/load
+ * balancers. Best-effort — returns null fields when not determinable.
+ *
+ * The client is responsible for gating calls to this function behind the
+ * user's `audienceAnalytics` consent (see src/utils/captureSignals.js).
+ */
+exports.getClientSignals = functions.https.onCall(async (request) => {
+  if (!request.auth?.uid) {
+    throw new functions.https.HttpsError('unauthenticated', 'Must be logged in');
+  }
+  // Firebase Hosting + Google Cloud Functions v2 may set various geo headers
+  // depending on how the request is routed. Read whichever is populated.
+  const h = request.rawRequest?.headers || {};
+  const pick = (...keys) => {
+    for (const k of keys) {
+      const v = h[k] || h[k.toLowerCase()];
+      if (v && typeof v === 'string') return v.trim();
+    }
+    return null;
+  };
+  const country = pick(
+    'x-appengine-country',          // App Engine / Firebase Hosting
+    'cf-ipcountry',                 // Cloudflare
+    'fastly-geo-country-code',      // Fastly
+    'x-country-code',               // Common proxy header
+    'x-vercel-ip-country',
+  );
+  const region = pick(
+    'x-appengine-region',
+    'cf-region-code',
+    'x-vercel-ip-country-region',
+  );
+  const city = pick(
+    'x-appengine-city',
+    'cf-ipcity',
+    'x-vercel-ip-city',
+  );
+  return {
+    country: country && country !== 'ZZ' ? country.toUpperCase() : null,
+    region:  region  || null,
+    city:    city    ? decodeURIComponent(city) : null,
+  };
+});
+
+/**
+ * aggregateCreatorAudience
+ * Callable. Reads the caller's followers, joins their `users/{uid}/meta/signals`
+ * + DOB/gender, and writes anonymized aggregates to
+ * `creators/{uid}/aggregates/audience`.
+ *
+ * Only includes followers whose `audienceAnalytics` consent is granted —
+ * others are counted only in a "consent-withheld" bucket (for UI transparency).
+ * Cached server-side for 1 hour.
+ */
+exports.aggregateCreatorAudience = functions.https.onCall(
+  { timeoutSeconds: 60, memory: '256MiB' },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new functions.https.HttpsError('unauthenticated', 'Must be logged in');
+
+    const aggRef = db.collection('creators').doc(uid).collection('aggregates').doc('audience');
+    const existing = await aggRef.get();
+    const now = Date.now();
+    if (existing.exists) {
+      const d = existing.data();
+      const last = d.updatedAtMs || 0;
+      if (now - last < 60 * 60 * 1000) {
+        return { cached: true, ...d };
+      }
+    }
+
+    // Fetch followers (flat collection: users/{creatorId}/followers/{followerId})
+    const followersSnap = await db.collection('users').doc(uid).collection('followers').limit(5000).get();
+    const followerIds = followersSnap.docs.map(d => d.id);
+    const totalFollowers = followerIds.length;
+
+    const ageBuckets   = { '13-17': 0, '18-24': 0, '25-34': 0, '35-44': 0, '45+': 0, unknown: 0 };
+    const genderCounts = { male: 0, female: 0, nyb: 0, unknown: 0 };
+    const countryCounts = {};
+    const languageCounts = {};
+    const gameCounts     = {};
+    const tagCounts      = {};
+    const contentTypeCounts = {};
+    const activeHours    = new Array(24).fill(0);
+    let consentWithheld = 0;
+    let affinityContributors = 0;
+
+    // Batch reads in chunks of 10 (Firestore getAll limit is higher, but keeps memory low)
+    const chunkSize = 30;
+    for (let i = 0; i < followerIds.length; i += chunkSize) {
+      const chunk = followerIds.slice(i, i + chunkSize);
+      const userRefs   = chunk.map(id => db.collection('users').doc(id));
+      const signalRefs = chunk.map(id => db.collection('users').doc(id).collection('meta').doc('signals'));
+      const consentRefs = chunk.map(id => db.collection('users').doc(id).collection('meta').doc('consents'));
+      const affinityRefs = chunk.map(id => db.collection('users').doc(id).collection('meta').doc('affinity'));
+      const [users, signals, consents, affinities] = await Promise.all([
+        db.getAll(...userRefs),
+        db.getAll(...signalRefs),
+        db.getAll(...consentRefs),
+        db.getAll(...affinityRefs),
+      ]);
+      for (let j = 0; j < chunk.length; j++) {
+        const u = users[j].exists   ? users[j].data()   : null;
+        const s = signals[j].exists ? signals[j].data() : null;
+        const c = consents[j].exists ? consents[j].data() : null;
+        const ok = c?.audienceAnalytics?.granted === true;
+        if (!ok) { consentWithheld++; continue; }
+
+        const bucket = u?.ageBucket;
+        if (bucket && ageBuckets[bucket] != null) ageBuckets[bucket]++;
+        else ageBuckets.unknown++;
+
+        const g = u?.gender;
+        if (g && genderCounts[g] != null) genderCounts[g]++;
+        else genderCounts.unknown++;
+
+        const country = u?.country || s?.country;
+        if (country) countryCounts[country] = (countryCounts[country] || 0) + 1;
+
+        const lang = s?.language;
+        if (lang) {
+          const primary = String(lang).split('-')[0];
+          languageCounts[primary] = (languageCounts[primary] || 0) + 1;
+        }
+
+        // Merge affinity rollups (only present for users with personalizedAds consent)
+        const aff = affinities[j].exists ? affinities[j].data() : null;
+        if (aff) {
+          affinityContributors++;
+          (aff.topGames || []).forEach(({ name, value }) => {
+            if (name) gameCounts[name] = (gameCounts[name] || 0) + (value || 1);
+          });
+          (aff.topTags || []).forEach(({ name, value }) => {
+            if (name) tagCounts[name] = (tagCounts[name] || 0) + (value || 1);
+          });
+          (aff.topContentTypes || []).forEach(({ name, value }) => {
+            if (name) contentTypeCounts[name] = (contentTypeCounts[name] || 0) + (value || 1);
+          });
+          if (Array.isArray(aff.activeHours) && aff.activeHours.length === 24) {
+            for (let h = 0; h < 24; h++) activeHours[h] += aff.activeHours[h] || 0;
+          }
+        }
+      }
+    }
+
+    // Rank top countries/languages/games/tags/contentTypes
+    const rank = (obj, n = 10) => Object.entries(obj)
+      .sort((a, b) => b[1] - a[1]).slice(0, n)
+      .map(([name, value]) => ({ name, value }));
+    const topCountries    = rank(countryCounts);
+    const topLanguages    = rank(languageCounts);
+    const topGames        = rank(gameCounts);
+    const topTags         = rank(tagCounts, 15);
+    const topContentTypes = rank(contentTypeCounts);
+
+    const payload = {
+      totalFollowers,
+      consentedFollowers: totalFollowers - consentWithheld,
+      consentWithheld,
+      ageBuckets,
+      genderCounts,
+      topCountries,
+      topLanguages,
+      topGames,
+      topTags,
+      topContentTypes,
+      activeHours,
+      affinityContributors,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAtMs: now,
+    };
+    await aggRef.set(payload, { merge: true });
+    return { cached: false, ...payload };
+  }
+);
+
+// ─────────────────────────────────────────────────────────────────────────
+// USER AFFINITY — rolls raw users/{uid}/events → users/{uid}/meta/affinity
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * Core rollup: reads last 30 days of events for a uid and writes a
+ * compact affinity doc: topGames, topTags, topCreators, topContentTypes,
+ * activeHours (0-23 histogram), totalEvents, lastRollupAt.
+ *
+ * Event-type weights reflect intent strength (a share is worth more than a view).
+ */
+async function rollupAffinityFor(uid) {
+  if (!uid) return null;
+  const cutoff = Date.now() - 30 * 24 * 3600 * 1000;
+  const snap = await db.collection('users').doc(uid).collection('events')
+    .where('tsMs', '>=', cutoff)
+    .limit(5000)
+    .get();
+
+  if (snap.empty) {
+    await db.collection('users').doc(uid).collection('meta').doc('affinity')
+      .set({ topGames: [], topTags: [], topCreators: [], topContentTypes: [],
+             activeHours: new Array(24).fill(0), totalEvents: 0,
+             lastRollupAt: admin.firestore.FieldValue.serverTimestamp(),
+             lastRollupAtMs: Date.now() }, { merge: true });
+    return { totalEvents: 0 };
+  }
+
+  const W = {
+    view: 1, dwell: 2, short_watched: 3,
+    like: 5, comment: 6, save: 6, repost: 8, share: 8,
+    profile_visit: 4, creator_follow: 10,
+    tag_click: 4, game_click: 5, search: 2,
+    ad_click: 6, ad_impression: 1, ad_dismiss: -1,
+    unlike: -3, hide: -5, report: -10,
+  };
+
+  const games = {}, tags = {}, creators = {}, types = {};
+  const hours = new Array(24).fill(0);
+  let total = 0;
+
+  snap.docs.forEach(d => {
+    const e = d.data();
+    const w = W[e.type] != null ? W[e.type] : 1;
+    total++;
+    if (e.gameId)      games[e.gameId] = (games[e.gameId] || 0) + w;
+    if (e.contentType) types[e.contentType] = (types[e.contentType] || 0) + w;
+    if (e.authorId)    creators[e.authorId] = (creators[e.authorId] || 0) + w;
+    if (Array.isArray(e.tags)) e.tags.forEach(t => { if (t) tags[t] = (tags[t] || 0) + w; });
+    if (e.tsMs) {
+      const h = new Date(e.tsMs).getUTCHours();
+      if (h >= 0 && h < 24) hours[h]++;
+    }
+  });
+
+  const rank = (obj, n = 10) => Object.entries(obj)
+    .filter(([,v]) => v > 0)
+    .sort((a, b) => b[1] - a[1]).slice(0, n)
+    .map(([name, value]) => ({ name, value }));
+
+  const affinity = {
+    topGames: rank(games),
+    topTags:  rank(tags, 15),
+    topCreators: rank(creators, 25),
+    topContentTypes: rank(types),
+    activeHours: hours,
+    totalEvents: total,
+    lastRollupAt: admin.firestore.FieldValue.serverTimestamp(),
+    lastRollupAtMs: Date.now(),
+  };
+
+  await db.collection('users').doc(uid).collection('meta').doc('affinity')
+    .set(affinity, { merge: true });
+  return affinity;
+}
+
+/** Callable — lets the client force-refresh its own affinity (used by ad targeting). */
+exports.rollupUserAffinity = functions.https.onCall(
+  { timeoutSeconds: 60, memory: '256MiB' },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new functions.https.HttpsError('unauthenticated', 'Must be logged in');
+    // Respect consent: only roll up if personalizedAds is granted
+    const c = await db.collection('users').doc(uid).collection('meta').doc('consents').get();
+    if (c.data()?.personalizedAds?.granted !== true) {
+      return { skipped: true, reason: 'consent-not-granted' };
+    }
+    const res = await rollupAffinityFor(uid);
+    return { ok: true, ...res };
+  }
+);
+
+/**
+ * Scheduled — rolls up affinity for users who have recent events.
+ * Runs daily at 03:30 UTC. Scans users with new events in the last 36h.
+ */
+exports.scheduledRollupAffinity = functions.scheduler
+  .onSchedule('30 3 * * *', async () => {
+    // Walk the collectionGroup of recent events to find active uids
+    const since = Date.now() - 36 * 3600 * 1000;
+    const recent = await db.collectionGroup('events')
+      .where('tsMs', '>=', since)
+      .select() // minimize reads — we only need paths
+      .limit(20000)
+      .get();
+
+    const uids = new Set();
+    recent.docs.forEach(d => {
+      // path: users/{uid}/events/{eventId}
+      const parts = d.ref.path.split('/');
+      const uidIdx = parts.indexOf('users');
+      if (uidIdx >= 0 && parts[uidIdx + 1]) uids.add(parts[uidIdx + 1]);
+    });
+
+    let count = 0;
+    for (const uid of uids) {
+      try { await rollupAffinityFor(uid); count++; } catch (e) { console.warn('rollup fail', uid, e.message); }
+    }
+    console.log(`rollupAffinity: rolled up ${count}/${uids.size} users`);
+  });
+
+/**
+ * Scheduled — deletes raw events older than 90 days.
+ * Affinity rollups survive; raw logs are GDPR-minimised.
+ * Runs daily at 04:00 UTC.
+ */
+exports.scheduledPruneEvents = functions.scheduler
+  .onSchedule('0 4 * * *', async () => {
+    const cutoff = Date.now() - 90 * 24 * 3600 * 1000;
+    const old = await db.collectionGroup('events')
+      .where('tsMs', '<', cutoff)
+      .limit(5000)
+      .get();
+    if (old.empty) return;
+    const batchSize = 400;
+    let deleted = 0;
+    for (let i = 0; i < old.docs.length; i += batchSize) {
+      const b = db.batch();
+      old.docs.slice(i, i + batchSize).forEach(d => b.delete(d.ref));
+      await b.commit();
+      deleted += Math.min(batchSize, old.docs.length - i);
+    }
+    console.log(`prunedEvents: deleted ${deleted}`);
+  });

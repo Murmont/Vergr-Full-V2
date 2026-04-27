@@ -14,15 +14,16 @@ const DEFAULT_TIERS = [
   { name: 'Legend', price: 1000, perks: ['All VIP perks', 'Co-stream invites', 'Private Discord channel', 'Merch discounts'] },
 ];
 
-export default function MembershipTiersScreen() {
+export default function MembershipTiersScreen({ embedded = false }) {
   const { isDesktop } = useResponsive();
   const { setRightPanel, setContentAlign } = useLayout();
 
   useEffect(() => {
+    if (embedded) return;
     setRightPanel(null);
     if (isDesktop) setContentAlign('left');
     return () => { setRightPanel(null); setContentAlign('center'); };
-  }, [setRightPanel, setContentAlign, isDesktop]);
+  }, [setRightPanel, setContentAlign, isDesktop, embedded]);
   const { currentUser } = useAuth();
   const { showToast } = useUI();
   const [tiers, setTiers] = useState(DEFAULT_TIERS);
@@ -40,14 +41,16 @@ export default function MembershipTiersScreen() {
     setSaving(false);
   };
 
-  return (
-    <div className={isDesktop ? "min-h-screen pb-8" : "screen-container min-h-screen pb-8"}>
-      <TopBar title="Membership Tiers" showBack actions={
-        <button onClick={handleSave} disabled={saving} className="text-brand-cyan font-semibold text-sm">{saving ? '...' : 'Save'}</button>
-      } />
-      <div className="px-4 py-4">
-        <p className="text-text-muted text-sm mb-6">Set up membership tiers for your fans. They pay with coins monthly to access exclusive perks.</p>
-        <div className="space-y-4">
+  const body = (
+    <>
+      <div className="flex items-center justify-between mb-5">
+        <p className="text-text-muted text-sm max-w-xl">Set up membership tiers for your fans. They pay with coins monthly to access exclusive perks.</p>
+        <button onClick={handleSave} disabled={saving}
+          className="h-9 px-4 rounded-xl bg-gradient-to-r from-brand-cyan to-brand-violet text-bg-dark font-extrabold text-xs hover:brightness-110 transition-all">
+          {saving ? 'Saving…' : 'Save tiers'}
+        </button>
+      </div>
+      <div className="space-y-4">
           {tiers.map((tier, i) => (
             <div key={i} className="p-4 rounded-2xl bg-surface-1 border border-white/[0.06]">
               <div className="flex items-center justify-between mb-3">
@@ -71,8 +74,18 @@ export default function MembershipTiersScreen() {
               </div>
             </div>
           ))}
-        </div>
       </div>
+    </>
+  );
+
+  if (embedded) return body;
+
+  return (
+    <div className={isDesktop ? "min-h-screen pb-8" : "screen-container min-h-screen pb-8"}>
+      <TopBar title="Membership Tiers" showBack actions={
+        <button onClick={handleSave} disabled={saving} className="text-brand-cyan font-semibold text-sm">{saving ? '...' : 'Save'}</button>
+      } />
+      <div className="px-4 py-4">{body}</div>
     </div>
   );
 }

@@ -7,6 +7,7 @@ import { useUser } from '../../context/UserContext';
 import { useUI } from '../../context/UIContext';
 import { awardVP } from '../../firebase/firestore';
 import Icon from '../../components/Icon';
+import { CoinIcon } from '../../components/CoinIcon';
 import TopBar from '../../components/TopBar';
 import InfoTooltip from '../../components/InfoTooltip';
 import { BOOST_COSTS } from '../../utils/vpSystem';
@@ -103,7 +104,7 @@ export default function BoostScreen() {
 
         {/* Balance */}
         <div className="flex items-center gap-2 mb-4 px-1">
-          <Icon name="paid" size={16} className="text-brand-gold" />
+          <CoinIcon size={16} />
           <span className="text-brand-gold font-bold font-dmmono text-sm">{balance.toLocaleString()}</span>
           <span className="text-text-muted text-xs">coins available</span>
         </div>

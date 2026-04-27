@@ -12,7 +12,7 @@ export default function ProfileSetupStep2Screen() {
   return (
     <div className="screen-container min-h-screen flex flex-col">
       <header className="flex items-center justify-between px-5 pt-12 pb-4">
-        <button onClick={() => navigate(-1)} className="w-10 h-10 flex items-center justify-center text-white/80"><Icon name="arrow-left" size={24} /></button>
+        <button onClick={() => navigate(-1)} className="w-10 h-10 flex items-center justify-center text-white/80"><Icon name="arrow_back" size={24} /></button>
         <div className="flex items-center gap-2"><div className="w-8 h-1 rounded-full bg-primary" /><div className="w-8 h-1 rounded-full bg-primary" /></div>
         <button onClick={() => navigate('/setup/follow-suggestions')} className="text-text-secondary text-sm font-semibold">Skip</button>
       </header>

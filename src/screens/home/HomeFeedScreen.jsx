@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
 import { useUser } from '../../context/UserContext';
 import { useAuth } from '../../context/AuthContext';
 import { useNotifications } from '../../context/NotificationContext';
@@ -8,9 +7,10 @@ import { getFeedPosts, getTrendingPosts, getFollowingFeedPosts, getActiveFiresto
 import PostCard from '../../components/PostCard';
 import CoinDisplay from '../../components/CoinDisplay';
 import Icon from '../../components/Icon';
-import RightSidebarPanel from '../../components/RightSidebarPanel';
+import HomeFeedRail from '../../components/brand/HomeFeedRail';
+import DesktopSidebar from '../../components/DesktopSidebar';
+import BottomNav from '../../components/BottomNav';
 import DailyRewardBanner from '../../components/DailyRewardBanner';
-import WatchToEarnQuest from '../../components/WatchToEarnQuest';
 import SuggestionsCarousel from '../../components/SuggestionsCarousel';
 import AdCard from '../../components/AdCard';
 import VergrAd from '../../components/VergrAd';
@@ -20,6 +20,7 @@ import CreatePostModal from '../../components/CreatePostModal';
 import useResponsive from '../../hooks/useResponsive';
 import { useLayout } from '../../context/LayoutContext';
 import { injectAdsRandomly } from '../../utils/feedInjections';
+import { orderAdsByAffinity } from '../../utils/adMatcher';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 
@@ -104,14 +105,7 @@ export default function HomeFeedScreen() {
   // Track which tabs have been fetched
   const fetched = useRef({ following: false, trending: false, news: false });
 
-  useEffect(() => {
-    if (isDesktop) {
-      setRightPanel(<RightSidebarPanel />);
-      setContentAlign('left');
-      setLayout('professional');
-    }
-    return () => { setRightPanel(null); setContentAlign('center'); setLayout('standard'); };
-  }, [isDesktop, setRightPanel, setContentAlign, setLayout]);
+  // HomeFeedScreen owns its own layout — no LayoutContext plumbing.
 
   // Fetch ads once — Firestore ads only. Klipy ads live in the Messages media panel (GIFs/Stickers/Clips).
   useEffect(() => {
@@ -119,14 +113,18 @@ export default function HomeFeedScreen() {
       setAdsLoading(true);
       try {
         const firestoreAds = await getActiveFirestoreAds(10);
-        setAds(firestoreAds || []);
+        // Re-order by affinity so high-relevance ads appear first
+        const ordered = currentUser?.uid
+          ? await orderAdsByAffinity(firestoreAds || [], currentUser.uid)
+          : (firestoreAds || []);
+        setAds(ordered);
       } catch {
         setAds([]);
       }
       setAdsLoading(false);
     };
     fetchAds();
-  }, []);
+  }, [currentUser?.uid]);
 
   // Fetch For You on mount
   useEffect(() => {
@@ -556,7 +554,7 @@ export default function HomeFeedScreen() {
     }
   };
 
-  return (
+  const feedContent = (
     <div className="min-h-screen pb-20 lg:pb-0">
       {isMobile && (
         <header className="sticky top-0 z-40 glass-header px-4 h-[52px] flex items-center justify-between">
@@ -564,18 +562,67 @@ export default function HomeFeedScreen() {
           <div className="flex items-center gap-3"><CoinDisplay amount={wallet?.balance || 0} size="sm" /><button onClick={() => navigate('/notifications')} className="relative"><Icon name="notifications" size={22} className="text-text-secondary" />{unreadNotifCount > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-brand-ember text-[10px] flex items-center justify-center font-bold text-white border-2 border-bg-dark">{unreadNotifCount > 9 ? '9+' : unreadNotifCount}</span>}</button></div>
         </header>
       )}
+      {/* Desktop header strip */}
+      {isDesktop && (
+        <div className="px-6 pt-6 pb-4 flex items-center justify-between">
+          <div>
+            <h1 className="font-syne text-2xl font-extrabold tracking-tight text-text-primary">Home</h1>
+            <p className="text-text-muted text-xs mt-0.5">Your feed · the whole VERGR world in one scroll</p>
+          </div>
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="hidden md:inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-brand-violet to-brand-pink text-white text-xs font-bold shadow-lg shadow-brand-violet/30 hover:brightness-110">
+            <Icon name="add" size={15} /> New Post
+          </button>
+        </div>
+      )}
+
+      {/* Composer card (desktop) */}
+      {isDesktop && (
+        <div className="px-6 pb-4">
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="w-full flex items-center gap-3 p-3.5 rounded-2xl bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.05] text-left">
+            <img
+              src={profile?.avatar || '/brand/logo.png'}
+              alt=""
+              className="w-9 h-9 rounded-full object-cover border border-white/[0.08] shrink-0"
+            />
+            <span className="flex-1 text-[13px] text-text-muted">Share something with the squad…</span>
+            <span className="hidden md:flex items-center gap-2">
+              <span className="w-8 h-8 rounded-lg bg-white/[0.04] flex items-center justify-center text-brand-cyan">
+                <Icon name="photo_camera" size={15} />
+              </span>
+              <span className="w-8 h-8 rounded-lg bg-white/[0.04] flex items-center justify-center text-brand-violet">
+                <Icon name="videocam" size={15} />
+              </span>
+              <span className="w-8 h-8 rounded-lg bg-white/[0.04] flex items-center justify-center text-brand-ember">
+                <Icon name="podcasts" size={15} />
+              </span>
+            </span>
+          </button>
+        </div>
+      )}
+
       <div className="sticky top-[52px] lg:top-0 z-30 glass-header px-2" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-        <div className="flex items-center overflow-x-auto no-scrollbar">
+        <div className="flex items-center gap-1 overflow-x-auto no-scrollbar px-2 py-2">
           {FEED_TABS.map((tab) => (
-            <button key={tab} onClick={() => setActiveTab(tab)} className={`flex-none px-5 py-3.5 text-[13px] font-semibold whitespace-nowrap transition-colors relative ${activeTab === tab ? 'text-text-primary' : 'text-text-muted hover:text-text-secondary'}`}>
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`flex-none px-4 py-1.5 text-[12px] font-semibold whitespace-nowrap rounded-full transition-colors relative ${
+                activeTab === tab
+                  ? 'bg-gradient-to-r from-brand-violet to-brand-pink text-white shadow-md shadow-brand-violet/30'
+                  : 'text-text-muted hover:text-text-primary hover:bg-white/[0.04]'
+              }`}
+            >
               {tab}
-              {activeTab === tab && <motion.div layoutId="feedTabIndicator" className="absolute bottom-0 left-2 right-2 h-[2px] bg-brand-cyan rounded-full" transition={{ type: 'spring', stiffness: 500, damping: 35 }} />}
             </button>
           ))}
         </div>
       </div>
+      <HomeStoriesStrip onNavigate={navigate} />
       <DailyRewardBanner />
-      <WatchToEarnQuest />
 
       {/* Pull-to-refresh indicator */}
       {(pullDistance > 0 || refreshing) && (
@@ -614,6 +661,98 @@ export default function HomeFeedScreen() {
           onClose={() => setNewsVideoViewer(null)}
         />
       )}
+    </div>
+  );
+
+  // HomeFeedScreen owns its full chrome — no MainLayout / ResponsiveLayout wrapper.
+  if (!isDesktop) {
+    return (
+      <div className="min-h-screen bg-bg-dark">
+        <div className="max-w-[480px] mx-auto min-h-screen relative pb-20">
+          {feedContent}
+          <BottomNav />
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="min-h-screen bg-bg-dark">
+      <DesktopSidebar />
+      <DesktopHomeShell>
+        <div className="flex-1 min-w-0 border-r border-white/[0.06]">
+          {feedContent}
+        </div>
+        <aside className="w-[300px] shrink-0 bg-[#0e0e1a] border-l border-white/[0.06] sticky top-0 h-screen overflow-y-auto no-scrollbar">
+          <HomeFeedRail />
+        </aside>
+      </DesktopHomeShell>
+    </div>
+  );
+}
+
+// Shell that sits next to the fixed sidebar — listens for collapse events and
+// shifts its left margin so the feed/rail fill the remaining viewport width
+// with no empty gutters on either side.
+function DesktopHomeShell({ children }) {
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return localStorage.getItem('vergr_sidebar_collapsed') === '1'; } catch { return false; }
+  });
+  useEffect(() => {
+    const handler = (e) => setCollapsed(e.detail?.collapsed ?? false);
+    window.addEventListener('sidebar-toggle', handler);
+    return () => window.removeEventListener('sidebar-toggle', handler);
+  }, []);
+  return (
+    <div
+      style={{ marginLeft: collapsed ? 72 : 240 }}
+      className="flex min-h-screen transition-[margin] duration-200"
+    >
+      {children}
+    </div>
+  );
+}
+
+// Stories / Live strip — horizontal row of circular avatars with optional LIVE badge.
+function HomeStoriesStrip({ onNavigate }) {
+  const items = [
+    { id: 'me',  name: 'Your Story', isSelf: true,  color: 'from-brand-violet to-brand-pink' },
+    { id: 'u1',  name: 'Volt',     live: true,  color: 'from-brand-ember to-brand-pink' },
+    { id: 'u2',  name: 'Raze',     live: false, color: 'from-brand-violet to-brand-cyan' },
+    { id: 'u3',  name: 'Nova',     live: false, color: 'from-brand-pink to-brand-violet' },
+    { id: 'u4',  name: 'ThunderX', live: false, color: 'from-brand-cyan to-brand-violet' },
+    { id: 'u5',  name: 'Frost',    live: false, color: 'from-brand-cyan to-brand-pink' },
+    { id: 'u6',  name: 'Storm',    live: false, color: 'from-brand-gold to-brand-ember' },
+    { id: 'u7',  name: 'VERGR',    live: false, color: 'from-brand-violet to-brand-pink' },
+  ];
+  return (
+    <div className="px-4 py-3 border-b border-white/[0.04]">
+      <div className="flex items-start gap-3 overflow-x-auto no-scrollbar">
+        {items.map(i => (
+          <button
+            key={i.id}
+            onClick={() => i.isSelf ? onNavigate('/create-post') : onNavigate('/go-live')}
+            className="flex flex-col items-center gap-1.5 shrink-0 w-[64px]"
+          >
+            <div className="relative">
+              <div className={`w-[56px] h-[56px] rounded-full bg-gradient-to-br ${i.color} p-[2px]`}>
+                <div className="w-full h-full rounded-full bg-bg-dark flex items-center justify-center overflow-hidden">
+                  {i.isSelf ? (
+                    <div className="w-full h-full rounded-full bg-surface-2 flex items-center justify-center">
+                      <Icon name="add" size={22} className="text-text-primary" />
+                    </div>
+                  ) : (
+                    <span className="text-[14px] font-syne font-extrabold text-white/90">{i.name[0]}</span>
+                  )}
+                </div>
+              </div>
+              {i.live && (
+                <span className="absolute -top-1 left-1/2 -translate-x-1/2 px-1.5 py-[1px] rounded-sm bg-brand-ember text-[8px] font-dmmono font-bold text-white uppercase tracking-wider">LIVE</span>
+              )}
+            </div>
+            <span className="text-[10px] font-dmmono text-text-secondary truncate w-full text-center">{i.name}</span>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

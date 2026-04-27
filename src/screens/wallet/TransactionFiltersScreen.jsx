@@ -28,7 +28,7 @@ export default function TransactionFiltersScreen() {
       {!isMobile && (
         <div className="flex justify-between items-center px-4 pt-4">
           <button onClick={() => navigate(-1)} className="text-white/80 hover:text-white transition-colors" aria-label="Go back">
-            <Icon name="arrow-left" size={24} />
+            <Icon name="arrow_back" size={24} />
           </button>
           <button onClick={() => navigate(-1)} className="text-brand-cyan font-semibold text-sm">Apply</button>
         </div>

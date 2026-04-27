@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import Icon from './Icon';
+import { CoinIcon } from './CoinIcon';
 
 export default function TopBar({ 
   title, 
@@ -35,7 +36,7 @@ export default function TopBar({
             onClick={() => navigate('/wallet')} 
             className="flex items-center gap-1.5 bg-surface-2/60 px-3 py-1.5 rounded-full border border-white/[0.06] hover:border-white/[0.12] transition-colors"
           >
-            <Icon name="paid" size={14} className="text-brand-gold" />
+            <CoinIcon size={14} />
             <span className="text-xs font-bold text-text-primary font-dmmono">{balance.toLocaleString()}</span>
           </button>
         )}

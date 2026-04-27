@@ -8,13 +8,19 @@ const tabs = [
   { path: '/explore', icon: 'explore', label: 'Explore' },
   { path: '/shorts', icon: 'slow_motion_video', label: 'Shorts' },
   { path: '/messages', icon: 'chat_bubble', label: 'Chat' },
+  { path: '/creator/dashboard', icon: 'dashboard', label: 'Studio' },
   { path: '/profile', icon: 'person', label: 'Profile' },
 ];
+
+// Routes that render full-bleed immersive UI with their own controls — bottom nav would overlap.
+const HIDE_ON_PATHS = ['/broadcast', '/watch', '/stream/', '/shorts', '/call/', '/go-live', '/creator'];
 
 export default function BottomNav() {
   const navigate = useNavigate();
   const location = useLocation();
   const { unreadChatCount = 0 } = useNotifications();
+
+  if (HIDE_ON_PATHS.some((p) => location.pathname.startsWith(p))) return null;
 
   const isActive = (path) => {
     if (path === '/') return location.pathname === '/';

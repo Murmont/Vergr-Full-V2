@@ -1,8 +1,37 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Icon from './Icon';
+import { trackEvent } from '../utils/trackEvent';
 
 export default function AdCard({ ad }) {
   const [imgError, setImgError] = useState(false);
+  const rootRef = useRef(null);
+  const fired = useRef(false);
+
+  // Fire ad_impression when the ad has been ≥50% visible for 1s
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el || !ad?.id) return;
+    let enteredAt = 0;
+    const io = new IntersectionObserver((entries) => {
+      for (const e of entries) {
+        if (e.isIntersecting && e.intersectionRatio >= 0.5) {
+          if (!enteredAt) {
+            enteredAt = performance.now();
+            setTimeout(() => {
+              if (enteredAt && !fired.current) {
+                fired.current = true;
+                trackEvent('ad_impression', { adId: ad.id, target: ad.title?.slice(0, 40) });
+              }
+            }, 1000);
+          }
+        } else {
+          enteredAt = 0;
+        }
+      }
+    }, { threshold: [0, 0.5, 1] });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [ad?.id]);
 
   // Determine media URL and target URL based on ad source
   const isFirestoreAd = ad.isFirestoreAd;
@@ -14,7 +43,7 @@ export default function AdCard({ ad }) {
   const sponsorLabel = isFirestoreAd ? 'Ad' : 'Klipy';
 
   return (
-    <div className="border-b border-white/[0.04] px-4 py-4 hover:bg-surface-1/30 transition-colors">
+    <div ref={rootRef} className="border-b border-white/[0.04] px-4 py-4 hover:bg-surface-1/30 transition-colors">
       <div className="max-w-[560px] mx-auto">
         <div className="flex items-start gap-3">
           <div className="w-10 h-10 rounded-full bg-brand-cyan/10 flex items-center justify-center shrink-0">
@@ -49,7 +78,10 @@ export default function AdCard({ ad }) {
             )}
             {targetUrl && (
               <button
-                onClick={() => window.open(targetUrl, '_blank')}
+                onClick={() => {
+                  trackEvent('ad_click', { adId: ad.id, target: ad.title?.slice(0, 40) });
+                  window.open(targetUrl, '_blank');
+                }}
                 className="mt-3 text-brand-cyan text-xs font-semibold flex items-center gap-1"
               >
                 Learn more <Icon name="arrow_forward" size={12} />

@@ -8,7 +8,11 @@ import Icon from './Icon';
 import PollCard from './PollCard';
 import TierBadge from './TierBadge';
 import EmbedVideoPlayer from './EmbedVideoPlayer';
+import TipPostModal from './TipPostModal';
+import { CoinIcon } from './CoinIcon';
 import { timeAgo } from '../utils/helpers';
+import { trackEvent } from '../utils/trackEvent';
+import { useImpressionTracker } from '../hooks/useImpressionTracker';
 
 function MediaContent({ post, onImageClick }) {
   const urls = post.mediaUrls?.length > 0 ? post.mediaUrls : (post.mediaUrl ? [post.mediaUrl] : []);
@@ -17,7 +21,7 @@ function MediaContent({ post, onImageClick }) {
 
   if (isVideo) {
     return (
-      <div className="mt-3 rounded-2xl overflow-hidden border border-white/[0.06] relative">
+      <div className="mt-3 rounded-2xl overflow-hidden border border-white/[0.06] relative aspect-video bg-black">
         <video
           src={urls[0]}
           controls
@@ -26,7 +30,7 @@ function MediaContent({ post, onImageClick }) {
           preload="metadata"
           poster={post.thumbnailUrl}
           data-feed-video="1"
-          className="w-full h-auto max-h-[400px] object-contain bg-black"
+          className="w-full h-full object-cover"
           onClick={(e) => e.stopPropagation()}
         />
         {post.type === 'clip' && (
@@ -40,10 +44,10 @@ function MediaContent({ post, onImageClick }) {
 
   if (urls.length > 1) {
     return (
-      <div className="mt-3 flex gap-1 rounded-2xl overflow-hidden border border-white/[0.06]">
-        <img src={urls[0]} alt="" onClick={openAt(0)} className="flex-1 h-48 object-cover cursor-zoom-in" loading="lazy" />
-        <div className="flex flex-col gap-1 w-24">
-          {urls.slice(1, 3).map((url, i) => <img key={i} src={url} alt="" onClick={openAt(i + 1)} className="flex-1 object-cover cursor-zoom-in" loading="lazy" />)}
+      <div className="mt-3 flex gap-1 rounded-2xl overflow-hidden border border-white/[0.06] aspect-video bg-black">
+        <img src={urls[0]} alt="" onClick={openAt(0)} className="flex-[2] h-full object-cover cursor-zoom-in" loading="lazy" />
+        <div className="flex flex-col gap-1 flex-1">
+          {urls.slice(1, 3).map((url, i) => <img key={i} src={url} alt="" onClick={openAt(i + 1)} className="flex-1 min-h-0 object-cover cursor-zoom-in" loading="lazy" />)}
           {urls.length > 3 && <div className="flex-1 bg-surface-2 flex items-center justify-center text-text-muted text-xs font-bold cursor-zoom-in" onClick={openAt(3)}>+{urls.length - 3}</div>}
         </div>
       </div>
@@ -51,8 +55,8 @@ function MediaContent({ post, onImageClick }) {
   }
 
   return (
-    <div className="mt-3 rounded-2xl overflow-hidden border border-white/[0.06]">
-      <img src={urls[0]} alt="" onClick={openAt(0)} className="w-full h-auto max-h-[400px] object-cover cursor-zoom-in" loading="lazy" />
+    <div className="mt-3 rounded-2xl overflow-hidden border border-white/[0.06] aspect-video bg-black">
+      <img src={urls[0]} alt="" onClick={openAt(0)} className="w-full h-full object-cover cursor-zoom-in" loading="lazy" />
     </div>
   );
 }
@@ -200,6 +204,7 @@ export default function PostCard({ post, onDeleted, onLikeUpdate }) {
   const [reposted, setReposted] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showRepostMenu, setShowRepostMenu] = useState(false);
+  const [showTipModal, setShowTipModal] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
   const [embeddedPost, setEmbeddedPost] = useState(null);
   const [liking, setLiking] = useState(false);
@@ -208,6 +213,8 @@ export default function PostCard({ post, onDeleted, onLikeUpdate }) {
   const [deleting, setDeleting] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [lightbox, setLightbox] = useState(null); // { urls, index }
+  const cardRef = useRef(null);
+  useImpressionTracker(cardRef, post, { source: 'feed' });
 
   const originalPostId = post.repostOf || post.quotedPostId;
   const isRepostType = post.type === 'repost';
@@ -253,6 +260,10 @@ export default function PostCard({ post, onDeleted, onLikeUpdate }) {
     setLikeCount(newCount);
     try {
       await toggleLike(post.id, currentUser.uid);
+      trackEvent(wasLiked ? 'unlike' : 'like', {
+        postId: post.id, authorId: post.authorId,
+        contentType: post.type, tags: post.tags?.slice?.(0, 5), gameId: post.gameId,
+      });
       if (onLikeUpdate) {
         onLikeUpdate(post.id, newCount, !wasLiked);
       }
@@ -291,6 +302,10 @@ export default function PostCard({ post, onDeleted, onLikeUpdate }) {
         await undoRepost(currentUser.uid, targetId);
       } else {
         await repost(currentUser.uid, targetId);
+        trackEvent('repost', {
+          postId: targetId, authorId: post.authorId,
+          contentType: post.type, tags: post.tags?.slice?.(0, 5), gameId: post.gameId,
+        });
       }
     } catch (err) {
       setReposted(wasReposted);
@@ -316,6 +331,10 @@ export default function PostCard({ post, onDeleted, onLikeUpdate }) {
       try {
         await navigator.share({ title: post.content?.slice(0, 50) || 'Check this out on VERGR', url: postUrl });
         incrementShareCount(post.id);
+        trackEvent('share', {
+          postId: post.id, authorId: post.authorId,
+          contentType: post.type, tags: post.tags?.slice?.(0, 5), gameId: post.gameId,
+        });
       } catch (err) { /* user cancelled */ }
     } else {
       try { await navigator.clipboard.writeText(postUrl); } catch (err) {}
@@ -351,6 +370,10 @@ export default function PostCard({ post, onDeleted, onLikeUpdate }) {
   };
 
   const goToPost = () => {
+    trackEvent('comment', {
+      postId: post.id, authorId: post.authorId,
+      contentType: post.type, tags: post.tags?.slice?.(0, 5), gameId: post.gameId,
+    });
     if (post.type === 'clip' || post.type === 'video') navigate(`/clip/${post.id}`);
     else navigate(`/post/${post.id}`);
   };
@@ -359,10 +382,11 @@ export default function PostCard({ post, onDeleted, onLikeUpdate }) {
 
   return (
     <motion.article
+      ref={cardRef}
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25, ease: [0.25, 0.1, 0.25, 1] }}
-      className="max-w-[560px] mx-auto border-b border-white/[0.04] hover:bg-surface-1/30 transition-colors"
+      className="w-full border-b border-white/[0.04] hover:bg-surface-1/30 transition-colors"
     >
       <div className="px-4 py-4">
         {/* Repost header */}
@@ -517,6 +541,16 @@ export default function PostCard({ post, onDeleted, onLikeUpdate }) {
                   <Icon name="visibility" size={16} /> {post.viewCount >= 1000 ? `${(post.viewCount / 1000).toFixed(1)}k` : post.viewCount}
                 </span>
               )}
+
+              <div className="flex-1" />
+
+              <button
+                onClick={(e) => { e.stopPropagation(); setShowTipModal(true); }}
+                className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-violet/12 border border-brand-violet/30 text-brand-violet hover:bg-brand-violet/20 transition-colors"
+              >
+                <CoinIcon size={13} />
+                <span className="text-[11px] font-bold">Tip</span>
+              </button>
             </div>
           </div>
 
@@ -576,6 +610,11 @@ export default function PostCard({ post, onDeleted, onLikeUpdate }) {
           </div>
         )}
       </div>
+      <TipPostModal
+        isOpen={showTipModal}
+        onClose={() => setShowTipModal(false)}
+        post={post}
+      />
     </motion.article>
   );
 }

@@ -8,15 +8,16 @@ import Icon from '../../components/Icon';
 import { useLayout } from '../../context/LayoutContext';
 import useResponsive from '../../hooks/useResponsive';
 
-export default function MonthlyAnalyticsScreen() {
+export default function MonthlyAnalyticsScreen({ embedded = false }) {
   const { isDesktop } = useResponsive();
   const { setRightPanel, setContentAlign } = useLayout();
 
   useEffect(() => {
+    if (embedded) return;
     setRightPanel(null);
     if (isDesktop) setContentAlign('left');
     return () => { setRightPanel(null); setContentAlign('center'); };
-  }, [setRightPanel, setContentAlign, isDesktop]);
+  }, [setRightPanel, setContentAlign, isDesktop, embedded]);
   const [period, setPeriod] = useState('30d');
   const [stats, setStats] = useState(null);
   const [topPosts, setTopPosts] = useState([]);
@@ -83,12 +84,10 @@ export default function MonthlyAnalyticsScreen() {
     return n.toString();
   };
 
-  return (
-    <div className={isDesktop ? "min-h-screen pb-8" : "screen-container min-h-screen pb-8"}>
-      <TopBar title="Analytics" showBack />
-
+  const shell = (
+    <>
       {/* Period selector */}
-      <div className="flex gap-2 px-4 py-3">
+      <div className="flex gap-2 mb-4">
         {['7d', '30d', '90d'].map(p => (
           <button key={p} onClick={() => setPeriod(p)}
             className={`px-4 py-2 rounded-full text-xs font-semibold transition-all ${
@@ -104,7 +103,7 @@ export default function MonthlyAnalyticsScreen() {
           <div className="w-6 h-6 border-2 border-surface-3 border-t-brand-cyan rounded-full animate-spin" />
         </div>
       ) : stats ? (
-        <div className="px-4">
+        <div>
           {/* Summary cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
             {[
@@ -171,6 +170,15 @@ export default function MonthlyAnalyticsScreen() {
           <p className="text-text-muted text-sm">No analytics data yet</p>
         </div>
       )}
+    </>
+  );
+
+  if (embedded) return shell;
+
+  return (
+    <div className={isDesktop ? "min-h-screen pb-8" : "screen-container min-h-screen pb-8"}>
+      <TopBar title="Analytics" showBack />
+      <div className="px-4 py-3">{shell}</div>
     </div>
   );
 }

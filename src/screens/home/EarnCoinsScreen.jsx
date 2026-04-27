@@ -9,10 +9,12 @@ import { functions } from '../../firebase/config';
 import TopBar from '../../components/TopBar';
 import CoinDisplay from '../../components/CoinDisplay';
 import Icon from '../../components/Icon';
+import { CoinIcon, VPIcon } from '../../components/CoinIcon';
 import InfoTooltip from '../../components/InfoTooltip';
 import WatchToEarnQuest from '../../components/WatchToEarnQuest';
 import { useLayout } from '../../context/LayoutContext';
 import useResponsive from '../../hooks/useResponsive';
+import { PLAN_VP_MULTIPLIER } from '../../utils/vpSystem';
 
 // Watch-to-Earn lives ONLY on the Earn screen as a dedicated component
 // (see <WatchToEarnQuest /> below). It is deliberately NOT added as a
@@ -35,11 +37,11 @@ const QUEST_DEFS = {
     { id: 'creator_content', title: 'Creator Content', description: 'Post 10 times with 5+ likes and 5+ comments each', reward: 100, currency: 'vp', target: 10, oneTime: true },
     { id: 'first_squad', title: 'Join a Squad', description: 'Join or create your first squad', reward: 50, currency: 'vp', target: 1, oneTime: true },
     { id: 'first_tournament', title: 'Enter a Tournament', description: 'Compete in your first tournament', reward: 100, currency: 'vp', target: 1, oneTime: true },
-    // Refer-a-Friend: reward is 3000 VP to the referrer, 5000 VP to the
+    // Refer-a-Friend: reward is 5000 VP to the referrer, 3000 VP to the
     // invitee. Unlocks when the invitee (a) signed up via the referrer's
     // link, (b) added their phone number, and (c) either joined a squad or
     // subscribed to Lite/Pro. See claimQuestReward in functions/index.js.
-    { id: 'refer_friend', title: 'Refer a Friend', description: 'Friend joins via your link, adds phone, and joins a squad or subscribes — you earn 3000 VP, they earn 5000 VP', reward: 3000, currency: 'vp', target: 1, requiresFriend: true, external: true, externalRoute: '/earn/refer', externalLabel: 'Manage' },
+    { id: 'refer_friend', title: 'Refer a Friend', description: 'Friend joins via your link, adds phone, and joins a squad or subscribes — you earn 5000 VP, they earn 3000 VP', reward: 5000, currency: 'vp', target: 1, requiresFriend: true, external: true, externalRoute: '/earn/refer', externalLabel: 'Manage' },
     // Rewarded via the dedicated `savePhoneNumber` callable (functions/index.js).
     // The quest-claim doc key is `${uid}_add_phone` so the grid below can
     // detect it as already-claimed just like the other oneTime quests.
@@ -56,7 +58,9 @@ export default function EarnCoinsScreen() {
   const [todayEarned, setTodayEarned] = useState(0);
 
   const { currentUser } = useAuth();
-  const { wallet } = useUser();
+  const { wallet, profile } = useUser();
+  const plan = profile?.tier || 'free';
+  const vpMultiplier = PLAN_VP_MULTIPLIER[plan] || 1;
   const { showToast } = useUI();
   const navigate = useNavigate();
   const { setRightPanel, setContentAlign } = useLayout();
@@ -156,7 +160,8 @@ export default function EarnCoinsScreen() {
     { icon: 'phone', title: 'Add Phone Number', desc: 'Unlock contact invites', reward: '1000 VP', color: 'text-brand-cyan', action: () => navigate('/messages/new') },
     { icon: 'emoji_events', title: 'Win Tournaments', desc: 'Win gems from prize pools', reward: 'Gems + VP', color: 'text-brand-ember', action: () => navigate('/tournaments') },
     { icon: 'person_add', title: 'Refer Friends', desc: 'Invite a friend who sets up properly', reward: '3000 VP (+5000 VP for them)', color: 'text-brand-pink', action: () => setActiveTab('special') },
-    { icon: 'trending_up', title: 'Level Up', desc: 'Higher VP = lower fees', reward: 'Up to 15% discount', color: 'text-brand-gold', action: () => navigate('/settings/how-it-works') },
+    { icon: 'trending_up', title: 'Level Up', desc: '30% → 10% commission, up to 20% coin discount', reward: 'Ranks 1–100', color: 'text-brand-gold', action: () => navigate('/settings/ranks') },
+    { icon: 'workspace_premium', title: 'Lite / Pro Plans', desc: '1.5×/2× VP + monthly VP & coins', reward: '+1k–3k VP / mo', color: 'text-brand-violet', action: () => navigate('/settings/subscription') },
   ];
 
   return (
@@ -186,17 +191,35 @@ export default function EarnCoinsScreen() {
               <p className="text-text-secondary text-[9px]">VP (levels + perks)</p>
             </div>
             <div className="p-3 rounded-xl bg-surface-2/50 text-center">
-              <Icon name="diamond" size={20} className="text-brand-cyan mx-auto mb-1" />
+              <div className="mx-auto mb-1 w-fit"><VPIcon size={20} /></div>
               <p className="text-brand-cyan text-lg font-black font-dmmono">{wallet?.gems || 0}</p>
               <p className="text-text-secondary text-[9px]">Gems (cashable)</p>
             </div>
             <div className="p-3 rounded-xl bg-surface-2/50 text-center">
-              <Icon name="paid" size={20} className="text-brand-gold mx-auto mb-1" />
+              <div className="mx-auto mb-1 w-fit"><CoinIcon size={20} /></div>
               <p className="text-brand-gold text-lg font-black font-dmmono">{wallet?.balance || 0}</p>
               <p className="text-text-secondary text-[9px]">Coins (spendable)</p>
             </div>
           </div>
           <p className="text-text-primary text-[10px] mt-3 text-center">Quests earn VP · Tournaments earn gems · Referrals earn VP for both of you</p>
+          {vpMultiplier > 1 && (
+            <button
+              onClick={() => navigate('/settings/subscription')}
+              className="mt-3 w-full flex items-center justify-center gap-2 text-[11px] font-semibold py-1.5 rounded-full bg-brand-cyan/15 border border-brand-cyan/30 text-brand-cyan"
+            >
+              <Icon name="bolt" size={14} />
+              {plan.toUpperCase()} active — {vpMultiplier}× VP on every action
+            </button>
+          )}
+          {vpMultiplier === 1 && (
+            <button
+              onClick={() => navigate('/settings/subscription')}
+              className="mt-3 w-full flex items-center justify-center gap-2 text-[11px] font-semibold py-1.5 rounded-full bg-brand-violet/15 border border-brand-violet/30 text-brand-violet"
+            >
+              <Icon name="workspace_premium" size={14} />
+              Upgrade to Lite / Pro for 1.5× / 2× VP
+            </button>
+          )}
         </div>
       </div>
 

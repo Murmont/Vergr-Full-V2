@@ -9,6 +9,16 @@ import useResponsive from '../../hooks/useResponsive';
 import TopBar from '../../components/TopBar';
 import UserAvatar from '../../components/UserAvatar';
 import Icon from '../../components/Icon';
+import { SingleElimBracket, DoubleElimBracket, RoundRobinSchedule, SwissRoundsList } from '../../components/tournaments/BracketVisualization';
+import { RoundRobinStandings, SwissStandings } from '../../components/tournaments/StandingsTable';
+import BRScoreboard from '../../components/tournaments/BRScoreboard';
+import {
+  getBracketType,
+  computePrizeBreakdown,
+  computeBRStandings,
+  computeRoundRobinStandings,
+  computeSwissStandings,
+} from '../../utils/tournamentTypes';
 
 export default function MatchDetailsScreen() {
   const { matchId } = useParams();
@@ -201,9 +211,19 @@ export default function MatchDetailsScreen() {
             <div className="p-4 rounded-2xl bg-surface-1 border border-white/[0.06]">
               <p className="text-text-muted text-[10px] uppercase tracking-widest font-bold mb-2">Prize Split</p>
               <div className="space-y-1.5 text-sm">
-                <div className="flex justify-between"><span className="text-text-secondary">1st place</span><span className="text-brand-gold font-dmmono font-bold">60%</span></div>
-                <div className="flex justify-between"><span className="text-text-secondary">2nd place</span><span className="text-text-primary font-dmmono">25%</span></div>
-                <div className="flex justify-between"><span className="text-text-secondary">3rd/4th place</span><span className="text-text-muted font-dmmono">7.5% each</span></div>
+                {(() => {
+                  const cfg = getBracketType(tournament.type) || getBracketType('single_elim');
+                  const pb = computePrizeBreakdown(tournament.prizePool || 0, cfg.id, { squadTreasury: cfg.mode === 'squad' });
+                  if (!pb.payouts.length) {
+                    return <p className="text-text-muted text-xs">Custom prize split set by creator</p>;
+                  }
+                  return pb.payouts.map(p => (
+                    <div key={p.place} className="flex justify-between">
+                      <span className="text-text-secondary">{p.label} ({p.pct}%)</span>
+                      <span className="text-text-primary font-dmmono">{p.player.toLocaleString()}</span>
+                    </div>
+                  ));
+                })()}
               </div>
             </div>
           </div>
@@ -233,11 +253,51 @@ export default function MatchDetailsScreen() {
         )}
 
         {activeTab === 'bracket' && (
-          <div className="space-y-3">
-            {matches.length === 0 ? (
+          <div className="space-y-4">
+            {/* Type-aware bracket visualization if rounds data exists */}
+            {tournament.bracketData?.rounds && tournament.type === 'single_elim' && (
+              <SingleElimBracket rounds={tournament.bracketData.rounds} />
+            )}
+            {tournament.bracketData?.winners && tournament.type === 'double_elim' && (
+              <DoubleElimBracket
+                winners={tournament.bracketData.winners}
+                losers={tournament.bracketData.losers}
+                grandFinal={tournament.bracketData.grandFinal}
+              />
+            )}
+            {tournament.bracketData?.rounds && tournament.type === 'squad_round_robin' && (
+              <>
+                <RoundRobinStandings
+                  standings={computeRoundRobinStandings(tournament.bracketData.rounds.flat())}
+                  teamLookup={tournament.bracketData.teamLookup || {}}
+                />
+                <RoundRobinSchedule rounds={tournament.bracketData.rounds} />
+              </>
+            )}
+            {tournament.bracketData?.rounds && tournament.type === 'swiss' && (
+              <>
+                <SwissStandings
+                  standings={computeSwissStandings(
+                    tournament.participants?.map(uid => ({ playerId: uid, name: participants.find(p => p.id === uid)?.displayName || uid })) || [],
+                    tournament.bracketData.rounds.flat()
+                  )}
+                />
+                <SwissRoundsList rounds={tournament.bracketData.rounds} />
+              </>
+            )}
+            {tournament.type === 'battle_royale' && (
+              <BRScoreboard
+                standings={computeBRStandings(tournament.brResults || [])}
+                gameCount={tournament.brGameCount || 3}
+                playerLookup={Object.fromEntries(participants.map(p => [p.id, p]))}
+              />
+            )}
+
+            {/* Fallback: legacy per-match list */}
+            {!tournament.bracketData && matches.length === 0 && (
               <p className="text-text-muted text-sm text-center py-8">Bracket not generated yet</p>
-            ) : (
-              matches.map(match => (
+            )}
+            {!tournament.bracketData && matches.length > 0 && matches.map(match => (
                 <div key={match.id} className="p-4 rounded-2xl bg-surface-1 border border-white/[0.06]">
                   <div className="flex items-center gap-2 mb-3">
                     <span className="text-text-muted text-[10px] uppercase font-bold tracking-widest">Round {match.round} · Match {match.matchNumber}</span>
@@ -259,8 +319,7 @@ export default function MatchDetailsScreen() {
                     </div>
                   </div>
                 </div>
-              ))
-            )}
+              ))}
           </div>
         )}
       </div>

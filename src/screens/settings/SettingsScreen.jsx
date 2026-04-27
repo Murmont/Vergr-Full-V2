@@ -23,6 +23,7 @@ const SETTINGS_SECTIONS = [
     title: 'Earnings & Payments',
     items: [
       { icon: 'workspace_premium', label: 'Subscription', route: '/settings/subscription' },
+      { icon: 'star', label: 'VP Levels & Ranks', route: '/settings/ranks' },
       { icon: 'account_balance_wallet', label: 'Wallet', route: '/wallet' },
       { icon: 'paid', label: 'Earn Coins', route: '/earn' },
       { icon: 'savings', label: 'Cash Out', route: '/request-payout' },

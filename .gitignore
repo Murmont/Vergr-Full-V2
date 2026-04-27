@@ -15,3 +15,8 @@ src-tauri/Cargo.lock
 # Built installer binary (generated; do not commit — ~10MB)
 public/downloads/VERGR-Setup.exe
 public/downloads/VERGR-Setup.msi
+
+# KYC private key material — never commit
+kyc-keys.tmp
+kyc-priv*.pem
+*.pem

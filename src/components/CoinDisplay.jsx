@@ -1,20 +1,21 @@
 import { useNavigate } from 'react-router-dom';
 import { formatCoins } from '../utils/helpers';
-import Icon from './Icon';
+import { CoinIcon } from './CoinIcon';
 
 export default function CoinDisplay({ amount = 0, size = 'md', className = '', clickable = true }) {
   const navigate = useNavigate();
 
   const sizes = {
-    sm: 'text-xs',
-    md: 'text-sm',
-    lg: 'text-lg',
-    xl: 'text-xl',
+    sm: { text: 'text-xs',  icon: 13 },
+    md: { text: 'text-sm',  icon: 15 },
+    lg: { text: 'text-lg',  icon: 18 },
+    xl: { text: 'text-xl',  icon: 22 },
   };
+  const s = sizes[size] || sizes.md;
 
   const content = (
-    <span className={`inline-flex items-center gap-1 font-dmmono font-semibold ${sizes[size]} text-text-primary ${className}`}>
-      <Icon name="paid" size={size === 'sm' ? 13 : size === 'lg' ? 18 : 15} className="text-brand-gold" />
+    <span className={`inline-flex items-center gap-1 font-dmmono font-semibold tabular-nums ${s.text} text-text-primary ${className}`}>
+      <CoinIcon size={s.icon} />
       {formatCoins(amount)}
     </span>
   );

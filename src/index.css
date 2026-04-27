@@ -8,34 +8,52 @@
 }
 
 @layer components {
+  /* Primary CTA — violet gradient (matches Claude Design Go Live button). */
   .btn-primary {
-    @apply w-full h-[52px] rounded-full bg-brand-cyan text-bg-dark font-bold text-[15px]
-      hover:brightness-110 active:scale-[0.97] transition-all duration-200
-      flex items-center justify-center font-dmsans tracking-tight;
+    @apply w-full h-[52px] rounded-full bg-gradient-to-br from-brand-violet to-brand-violet-light
+      text-white font-bold text-[15px] hover:brightness-110 active:scale-[0.97]
+      transition-all duration-200 flex items-center justify-center font-dmsans tracking-tight;
+    box-shadow: 0 4px 20px rgba(123,31,255,0.30);
   }
   .btn-secondary {
-    @apply w-full h-[52px] rounded-full border border-white/10 bg-transparent
-      text-text-primary font-semibold text-[15px] hover:bg-surface-2
+    @apply w-full h-[52px] rounded-full border border-white/10 bg-surface-1
+      text-text-primary font-semibold text-[15px] hover:bg-surface-2 hover:border-white/[0.15]
       active:scale-[0.97] transition-all duration-200 flex items-center justify-center;
   }
   .btn-ghost {
     @apply px-4 py-2 rounded-full text-text-secondary hover:text-text-primary
       hover:bg-surface-2 transition-all duration-200;
   }
+
   .input-field {
-    @apply w-full bg-surface-2 border border-white/[0.06] rounded-xl
+    @apply w-full bg-surface-2 border border-white/[0.08] rounded-xl
       py-4 px-4 text-text-primary placeholder:text-text-muted
-      focus:border-brand-cyan/50 focus:ring-0
+      focus:border-brand-violet-light/60 focus:ring-0
       focus:outline-none transition-colors duration-200 h-[52px] text-[15px] font-dmsans;
   }
   .input-with-icon { @apply input-field pl-12; }
-  .card { @apply bg-surface-1 border border-white/[0.06] rounded-2xl p-4; }
-  .card-hover { @apply card hover:border-white/[0.12] transition-colors duration-200; }
-  .badge { @apply inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold; }
-  .badge-cyan { @apply badge bg-brand-cyan/10 text-brand-cyan; }
-  .badge-gold { @apply badge bg-brand-gold/10 text-brand-gold; }
-  .badge-ember { @apply badge bg-brand-ember/10 text-brand-ember; }
-  .screen-container { @apply relative mx-auto flex min-h-screen w-full flex-col bg-bg-dark; max-width: 480px; }
+
+  /* Card — flat dark surface with subtle border (matches design's card-bg #14141F). */
+  .card {
+    @apply bg-surface-1 border border-surface-3 rounded-2xl p-4;
+  }
+  .card-hover {
+    @apply card hover:border-brand-violet-light/30 hover:bg-surface-2 transition-colors duration-200;
+  }
+
+  /* Badges — pill style matching the new palette. */
+  .badge        { @apply inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold; }
+  .badge-cyan   { @apply badge bg-brand-cyan/10        text-brand-cyan; }
+  .badge-violet { @apply badge bg-brand-violet/15      text-brand-violet-light; }
+  .badge-gem    { @apply badge bg-gem-blue/10          text-gem-blue; }
+  .badge-gold   { @apply badge bg-brand-gold-light/10  text-brand-gold-light; }
+  .badge-ember  { @apply badge bg-brand-ember/10       text-brand-ember; }
+  .badge-green  { @apply badge bg-success-green/10     text-success-green; }
+
+  .screen-container {
+    @apply relative mx-auto flex min-h-screen w-full flex-col bg-bg-dark;
+    max-width: 480px;
+  }
   @media (min-width: 1024px) {
     .screen-container { max-width: 680px; }
   }
@@ -47,9 +65,9 @@
 
 /* ─── Chat background pattern (Telegram-style) ─── */
 .chat-bg {
-  background-color: #07080D;
+  background-color: #0B0B14;
   background-image:
-    url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23232640' fill-opacity='0.18'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%232A2A3E' fill-opacity='0.18'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
 }
 
 /* Subtle scrolling background animation for the chat area */
@@ -67,8 +85,8 @@
   .mobile-only { display: none !important; }
   
   .chat-thread-desktop {
-    border-left: 1px solid rgba(35, 38, 64, 0.5);
-    border-right: 1px solid rgba(35, 38, 64, 0.5);
+    border-left: 1px solid rgba(42, 42, 62, 0.5);
+    border-right: 1px solid rgba(42, 42, 62, 0.5);
   }
 }
 
@@ -84,25 +102,25 @@
    DESKTOP ENHANCEMENTS — Cosmetic only, no layout changes
    ═══════════════════════════════════════════════════════════ */
 
-/* Subtle scrollbar for desktop (replaces hidden scrollbar) */
+/* Subtle scrollbar for desktop — violet to match new accent palette. */
 @media (min-width: 1024px) {
   ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: rgba(123, 111, 255, 0.15); border-radius: 3px; }
-  ::-webkit-scrollbar-thumb:hover { background: rgba(123, 111, 255, 0.3); }
+  ::-webkit-scrollbar-thumb { background: rgba(123, 31, 255, 0.15); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(180, 79, 255, 0.30); }
 }
 
-/* Glassmorphism utility — refractive lens effect */
+/* Glassmorphism utility — refractive lens effect on the new dark surface. */
 .glass-panel {
-  background: rgba(15, 17, 24, 0.65);
+  background: rgba(20, 20, 31, 0.65);
   backdrop-filter: blur(24px) saturate(1.5) brightness(1.05);
   -webkit-backdrop-filter: blur(24px) saturate(1.5) brightness(1.05);
-  border: 1px solid rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
-/* Refractive sticky header — Telegram 2026 "Liquid Glass" */
+/* Refractive sticky header. */
 .glass-header {
-  background: rgba(7, 8, 13, 0.55);
+  background: rgba(11, 11, 20, 0.65);
   backdrop-filter: blur(20px) saturate(1.8);
   -webkit-backdrop-filter: blur(20px) saturate(1.8);
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
@@ -111,7 +129,7 @@
   border-bottom-color: rgba(255, 255, 255, 0.1);
 }
 
-/* ─── Skeleton shimmer wave (replaces pulse) ─── */
+/* ─── Skeleton shimmer wave ─── */
 @keyframes skeletonShimmer {
   0% { background-position: -400px 0; }
   100% { background-position: 400px 0; }
@@ -119,11 +137,11 @@
 .skeleton-wave {
   background: linear-gradient(
     90deg,
-    rgba(22, 25, 34, 0) 0%,
-    rgba(29, 33, 48, 0.6) 40%,
-    rgba(35, 38, 64, 0.4) 50%,
-    rgba(29, 33, 48, 0.6) 60%,
-    rgba(22, 25, 34, 0) 100%
+    rgba(20, 20, 31, 0) 0%,
+    rgba(26, 26, 42, 0.6) 40%,
+    rgba(30, 30, 46, 0.4) 50%,
+    rgba(26, 26, 42, 0.6) 60%,
+    rgba(20, 20, 31, 0) 100%
   );
   background-size: 800px 100%;
   animation: skeletonShimmer 1.6s linear infinite;
@@ -201,7 +219,7 @@
   color: #09090B;
 }
 [data-theme='light'] .input-field:focus {
-  border-color: rgba(77,255,212,0.4);
+  border-color: rgba(180,79,255,0.40);
 }
 
 /* Light mode buttons */
@@ -236,9 +254,9 @@
 
 /* ─── Message delivered pulse ─── */
 @keyframes deliveredPulse {
-  0% { box-shadow: 0 0 0 0 rgba(77,255,212,0.3); }
-  50% { box-shadow: 0 0 12px 4px rgba(77,255,212,0.15); }
-  100% { box-shadow: 0 0 0 0 rgba(77,255,212,0); }
+  0%   { box-shadow: 0 0 0 0   rgba(180,79,255,0.30); }
+  50%  { box-shadow: 0 0 12px 4px rgba(180,79,255,0.15); }
+  100% { box-shadow: 0 0 0 0   rgba(180,79,255,0); }
 }
 .animate-delivered {
   animation: deliveredPulse 0.4s ease-out;

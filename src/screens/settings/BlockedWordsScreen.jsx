@@ -18,7 +18,7 @@ export default function BlockedWordsScreen() {
   const add = () => {if(newWord.trim()){setWords(p=>[...p,newWord.trim()]);setNewWord('');}};
   return (
     <div className={isDesktop ? "min-h-screen flex flex-col" : "screen-container min-h-screen flex flex-col"}>
-      <header className="flex items-center gap-3 px-5 pt-12 pb-4"><button onClick={()=>navigate(-1)} className="text-white/80"><Icon name="arrow-left" size={24}/></button><h1 className="text-white font-syne font-bold text-lg">Blocked Words</h1></header>
+      <header className="flex items-center gap-3 px-5 pt-12 pb-4"><button onClick={()=>navigate(-1)} className="text-white/80"><Icon name="arrow_back" size={24}/></button><h1 className="text-white font-syne font-bold text-lg">Blocked Words</h1></header>
       <main className="flex-1 px-5 pb-8">
         <p className="text-text-secondary text-sm mb-4">Messages containing these words will be hidden from your chats and comments.</p>
         <div className="flex gap-2 mb-6">

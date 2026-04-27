@@ -11,9 +11,14 @@ import useResponsive from '../../hooks/useResponsive';
 import { useLayout } from '../../context/LayoutContext';
 
 const CATEGORIES = [
+  { key: 'vp', label: 'Top VP', field: 'vp', icon: 'star', suffix: 'VP' },
+  { key: 'vpLevel', label: 'Highest Level', field: 'vpLevel', icon: 'trending_up', suffix: 'LVL' },
+  { key: 'tournamentWins', label: 'Tournament Wins', field: 'tournamentWins', icon: 'emoji_events' },
+  { key: 'earnings', label: 'Top Earners', field: 'totalEarned', icon: 'paid' },
   { key: 'xp', label: 'Top XP', field: 'totalXP', icon: 'military_tech' },
   { key: 'posts', label: 'Top Posters', field: 'postCount', icon: 'edit_note' },
   { key: 'followers', label: 'Most Followed', field: 'followerCount', icon: 'group' },
+  { key: 'streamers', label: 'Top Streamers', field: 'streamHours', icon: 'live_tv', suffix: 'hrs' },
 ];
 
 const PERIODS = ['All Time', 'This Month', 'This Week'];
@@ -136,7 +141,10 @@ export default function LeaderboardScreen() {
                     <p className={`text-sm font-semibold truncate ${user.isYou ? 'text-brand-cyan' : 'text-text-primary'}`}>{user.displayName || user.username}</p>
                     <p className="text-text-muted text-xs font-dmmono">@{user.username}</p>
                   </div>
-                  <span className="text-sm font-dmmono font-bold text-brand-gold">{formatVal(user[category.field])}</span>
+                  <span className="text-sm font-dmmono font-bold text-brand-gold">
+                    {formatVal(user[category.field])}
+                    {category.suffix && <span className="text-[10px] text-text-muted ml-1">{category.suffix}</span>}
+                  </span>
                   {user.isYou && <span className="px-2 py-0.5 rounded-full bg-brand-cyan/15 text-brand-cyan text-[9px] font-bold">YOU</span>}
                 </button>
               ))}

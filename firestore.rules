@@ -439,6 +439,58 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // ── Top-level payouts (NOWPayments crypto withdrawals) ─────────
+    // Server-only writes (Cloud Functions via admin SDK bypass these rules).
+    // Users read their own payouts for the history screen.
+    match /payouts/{payoutId} {
+      allow read: if isAuth() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow write: if false;
+    }
+
+    // ── Coin purchases (NOWPayments invoices) ──────────────────────
+    match /purchases/{orderId} {
+      allow read: if isAuth() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow write: if false;
+    }
+
+    // ── Payout rate quotes (60-second TTL) ────────────────────────
+    // Quotes are server-issued and consumed; clients should never write here.
+    match /payout_quotes/{quoteId} {
+      allow read: if isAuth() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow write: if false;
+    }
+
+    // ── Server cache (NOWPayments currency list etc.) ─────────────
+    match /cache/{key} {
+      allow read: if isAuth();
+      allow write: if false;
+    }
+
+    // ── Per-user rate-limit counters (Phase 4 anti-abuse) ─────────
+    // Only the owning user can read their own counters; writes are
+    // server-only via Cloud Functions.
+    match /rate_limits/{userId}/{document=**} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if false;
+    }
+
+    // ── Platform-side commission ledger (admin-only read) ─────────
+    match /platform_commissions/{logId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    match /platform_ledger/{day} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // ── Idempotency keys (server-side guard against double-charge) ─
+    match /idempotency/{key} {
+      allow read: if false;
+      allow write: if false;
+    }
+
     match /tips/{tipId} {
       allow read: if isAuth() && (
         resource.data.senderId == request.auth.uid ||
@@ -611,6 +663,40 @@ service cloud.firestore {
       );
       allow update: if isAdmin();
       allow delete: if isAdmin();
+    }
+
+    // ═══════════════════════════════════════════
+    // KYC — VERIFICATION APPLICATIONS
+    // Owner can create their own app & read status. Full PII lives in the
+    // /private/pii subdoc — admin/moderator only. Cloud Functions (admin SDK)
+    // bypass all rules and handle decisions + cleanup.
+    // ═══════════════════════════════════════════
+    match /verification_applications/{uid} {
+      allow create: if isOwner(uid)
+        && request.resource.data.status == 'pending'
+        && request.resource.data.userId == uid;
+      allow read:   if isOwner(uid) || isModerator();
+      allow update: if isModerator();
+      allow delete: if isAdmin();
+
+      match /private/{docId} {
+        // Owner can write their encrypted PII doc; they cannot read it back.
+        allow create: if isOwner(uid);
+        allow read, update, delete: if isModerator();
+      }
+    }
+
+    // Short-lived desktop→mobile handoff sessions (30-min TTL)
+    match /verification_sessions/{sid} {
+      allow create: if isAuth() && request.resource.data.userId == request.auth.uid;
+      allow read, update: if isAuth() && resource.data.userId == request.auth.uid;
+      allow delete: if isAdmin();
+    }
+
+    // Append-only audit log of KYC reviewer actions
+    match /kyc_audit_log/{eventId} {
+      allow read:  if isAdmin();
+      allow write: if false; // functions only
     }
   }
 }
